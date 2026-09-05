@@ -221,6 +221,15 @@ async function handleLogout() {
   router.push('/login')
 }
 
+function handleJoinGroup() {
+  const url = loginPageConfig.value.qqGroupUrl
+  if (!url) {
+    toast.warning('加群链接暂未配置，请联系管理员', 4000)
+    return
+  }
+  window.open(url, '_blank', 'noopener,noreferrer')
+}
+
 async function checkCardInfo() {
   if (!renewCardCode.value.trim()) {
     renewError.value = '请输入卡密'
@@ -383,16 +392,18 @@ function getDaysLabel(days: number) {
           </div>
         </div>
         <div class="flex shrink-0 items-center gap-1">
-          <a
-            v-if="loginPageConfig.qqGroupUrl"
-            :href="loginPageConfig.qqGroupUrl"
-            target="_blank"
-            rel="noopener noreferrer"
+          <button
+            type="button"
             class="h-8 w-8 flex items-center justify-center rounded-lg transition-colors hover:bg-gray-200/60 dark:hover:bg-gray-700/60"
-            title="加QQ群"
+            :title="loginPageConfig.qqGroupUrl ? '加QQ群' : '加群链接暂未配置'"
+            @click="handleJoinGroup"
           >
-            <div class="i-carbon-group text-sm" :style="{ color: 'var(--theme-primary)' }" />
-          </a>
+            <img
+              src="/qq-group.png"
+              alt="加QQ群"
+              class="h-[22px] w-[22px] rounded-full object-cover ring-1 ring-white/60 dark:ring-black/30"
+            >
+          </button>
           <button
             v-if="!userStore.isAdmin"
             class="h-8 w-8 flex items-center justify-center rounded-lg transition-colors hover:bg-gray-200/60 dark:hover:bg-gray-700/60"

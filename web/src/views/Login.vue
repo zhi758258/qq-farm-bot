@@ -5,6 +5,7 @@ import AnnouncementModal from '@/components/AnnouncementModal.vue'
 import BaseButton from '@/components/ui/BaseButton.vue'
 import BaseInput from '@/components/ui/BaseInput.vue'
 import { useAppStore } from '@/stores/app'
+import { useToastStore } from '@/stores/toast'
 import { useUserStore } from '@/stores/user'
 
 declare const __APP_VERSION__: string
@@ -18,6 +19,7 @@ const QQ_RE = /^\d{5,11}$/
 
 const userStore = useUserStore()
 const appStore = useAppStore()
+const toastStore = useToastStore()
 const appVersion = __APP_VERSION__
 const gameVersion = ref('')
 
@@ -253,6 +255,15 @@ function toggleMode() {
 
 function closeGroupVerifyModal() {
   showGroupVerifyModal.value = false
+}
+
+function handleJoinGroup() {
+  const url = appStore.loginPageConfig.qqGroupUrl
+  if (!url) {
+    toastStore.warning('加群链接暂未配置，请联系管理员', 4000)
+    return
+  }
+  window.open(url, '_blank', 'noopener,noreferrer')
 }
 
 async function checkCardClaimStatus() {
@@ -499,18 +510,20 @@ onMounted(() => {
               >购买卡密</a>
             </template>
           </div>
-          <a
-            v-if="appStore.loginPageConfig.qqGroupUrl"
-            :href="appStore.loginPageConfig.qqGroupUrl"
-            target="_blank"
-            rel="noopener noreferrer"
-            class="group flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-medium transition-colors"
+          <button
+            type="button"
+            class="group flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-medium transition-colors hover:opacity-85"
             style="color: var(--theme-primary); background: color-mix(in srgb, var(--theme-primary) 12%, transparent);"
-            title="点击加入QQ群"
+            :title="appStore.loginPageConfig.qqGroupUrl ? '点击加入QQ群' : '加群链接暂未配置'"
+            @click="handleJoinGroup"
           >
-            <div class="i-carbon-group text-sm" />
-            加QQ群
-          </a>
+            <img
+              src="/qq-group.png"
+              alt="加QQ群"
+              class="h-[18px] w-[18px] rounded-full object-cover ring-1 ring-white/50 dark:ring-black/30"
+            >
+            <span>加QQ群</span>
+          </button>
         </div>
         <div v-if="gameVersion" class="mt-1 text-xs opacity-25">
           游戏版本：{{ gameVersion }}
@@ -528,7 +541,13 @@ onMounted(() => {
         >
           <div class="w-[360px] rounded-xl bg-white p-5 shadow-2xl dark:bg-slate-800">
             <div class="mb-4 text-center">
-              <div class="i-carbon-group mb-2 text-4xl text-red-500" />
+              <div class="mx-auto mb-2 h-14 w-14 flex items-center justify-center overflow-hidden rounded-full bg-white shadow-sm ring-1 ring-gray-200 dark:ring-gray-700">
+                <img
+                  src="/qq-group.png"
+                  alt="QQ群"
+                  class="h-full w-full object-cover"
+                >
+              </div>
               <h3 class="text-lg font-semibold">
                 请先加入QQ群
               </h3>
@@ -548,16 +567,10 @@ onMounted(() => {
               </div>
             </div>
             <button
-              v-if="appStore.loginPageConfig.qqGroupUrl"
               class="btn btn-primary btn-block"
-              @click="closeGroupVerifyModal"
+              @click="handleJoinGroup"
             >
-              <a
-                :href="appStore.loginPageConfig.qqGroupUrl"
-                target="_blank"
-                rel="noopener noreferrer"
-                class="text-white no-underline"
-              >加入QQ群</a>
+              加入QQ群
             </button>
             <button class="btn btn-primary btn-block mt-2" @click="closeGroupVerifyModal">
               我知道了
