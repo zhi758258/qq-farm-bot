@@ -1,7 +1,9 @@
 <script setup lang="ts">
 import type { GroupVerifyConfig, GroupVerifyTestResult } from '@/composables/useAdminSystemConfig'
+import { computed } from 'vue'
 import BaseButton from '@/components/ui/BaseButton.vue'
 import BaseInput from '@/components/ui/BaseInput.vue'
+import BaseSelect from '@/components/ui/BaseSelect.vue'
 import BaseSwitch from '@/components/ui/BaseSwitch.vue'
 
 withDefaults(defineProps<{
@@ -20,9 +22,12 @@ const emit = defineEmits<{
 const config = defineModel<GroupVerifyConfig>('config', { required: true })
 const testQqModel = defineModel<string>('testQq')
 
+const isNapcat = computed(() => String(config.value?.verifyMode || '') === 'napcat')
+
 const ERROR_LABELS: Record<string, string> = {
   not_configured: '未配置验证接口地址',
   no_qq: '缺少QQ号',
+  no_group: '缺少QQ群号',
   service_unavailable: '验证服务不可达或响应异常',
   invalid_response: '接口返回内容不是有效JSON',
   not_in_group: '该QQ不在群内',
@@ -33,11 +38,16 @@ function errorLabel(result: GroupVerifyTestResult) {
 }
 
 function responsePreview(result: GroupVerifyTestResult) {
+  const body = result.responseBody
   try {
-    return JSON.stringify(result.responseBody).slice(0, 300)
+    if (body && typeof body === 'object' && Array.isArray((body as any).data) && (body as any).data.length > 3) {
+      const members = (body as any).data as unknown[]
+      return JSON.stringify({ ...body, data: members.slice(0, 3), dataTotal: members.length }).slice(0, 400)
+    }
+    return JSON.stringify(body).slice(0, 400)
   }
   catch {
-    return String(result.responseBody ?? '').slice(0, 300)
+    return String(body ?? '').slice(0, 400)
   }
 }
 </script>
@@ -79,12 +89,21 @@ function responsePreview(result: GroupVerifyTestResult) {
         启用前请确认：注册页已要求填写QQ号；未配置验证接口或接口异常时，普通用户将无法登录（管理员不受影响）。
       </div>
 
+      <BaseSelect
+        v-model="config.verifyMode"
+        label="验证方式"
+        :options="[
+          { label: '通用 GET 校验接口', value: '' },
+          { label: 'NapCat / OneBot HTTP 直连', value: 'napcat' },
+        ]"
+      />
+
       <div class="grid gap-3 md:grid-cols-2">
         <BaseInput
           v-model="config.qqGroupNumber"
           label="QQ群号"
           type="text"
-          placeholder="例如 123456789"
+          placeholder="例如 695130479"
         />
         <BaseInput
           v-model="config.timeoutMs"
@@ -95,18 +114,23 @@ function responsePreview(result: GroupVerifyTestResult) {
       </div>
       <BaseInput
         v-model="config.verifyUrl"
-        label="群机器人验证接口地址"
+        :label="isNapcat ? 'NapCat HTTP 服务地址' : '群机器人验证接口地址'"
         type="text"
-        placeholder="http://bot-host/api/check-group-member"
+        :placeholder="isNapcat ? 'http://你的NapCat地址:3000（OneBot 正向 HTTP 端口）' : 'http://bot-host/api/check-group-member'"
       />
       <BaseInput
         v-model="config.verifyToken"
-        label="验证 Token（可留空）"
+        :label="isNapcat ? 'NapCat access_token（可留空）' : '验证 Token（可留空）'"
         type="password"
-        placeholder="留空表示无需鉴权"
+        :placeholder="isNapcat ? '未开启 OneBot 鉴权可留空' : '留空表示无需鉴权'"
       />
 
-      <div class="rounded-2xl bg-gray-50 px-4 py-3 text-xs text-gray-500 dark:bg-gray-900/40 dark:text-gray-400">
+      <div v-if="isNapcat" class="rounded-2xl bg-gray-50 px-4 py-3 text-xs text-gray-500 dark:bg-gray-900/40 dark:text-gray-400">
+        直连模式：后端对 NapCat HTTP 地址发起 <code>POST get_group_member_list</code>，自动携带群号与
+        <code>access_token</code>；返回 <code>retcode: 0</code> 且 <code>data</code> 为成员数组即视为拉取成功，
+        随后按成员列表判断该QQ是否在群。NapCat 需开启「网络配置 → HTTP 服务器」正向端口。
+      </div>
+      <div v-else class="rounded-2xl bg-gray-50 px-4 py-3 text-xs text-gray-500 dark:bg-gray-900/40 dark:text-gray-400">
         接口约定：GET 请求，自动附加 <code>qq</code> 与 <code>group</code> 参数；鉴权通过请求头
         <code>Authorization: Bearer &lt;Token&gt;</code>。返回 <code>{"{"} ok: true, data: {"{"} inGroup: true {"}"} {"}"}</code>
         或 <code>{"{"} inGroup: true {"}"}</code> 表示在群内。
@@ -154,6 +178,9 @@ function responsePreview(result: GroupVerifyTestResult) {
             HTTP 状态：{{ testResult.httpStatus ?? '-' }}
             <template v-if="testResult.durationMs != null">
               ｜耗时：{{ testResult.durationMs }}ms
+            </template>
+            <template v-if="testResult.memberCount != null">
+              ｜群成员数：{{ testResult.memberCount }}
             </template>
             <template v-if="testResult.qqGroupNumber && !testResult.inGroup">
               ｜测试群号：{{ testResult.qqGroupNumber }}

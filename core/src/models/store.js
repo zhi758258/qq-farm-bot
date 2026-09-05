@@ -680,6 +680,7 @@ const DEFAULT_GROUP_VERIFY_CONFIG = {
     qqGroupNumber: '',
     verifyUrl: '',
     verifyToken: '',
+    verifyMode: '',
     timeoutMs: 5000
 };
 
@@ -1045,6 +1046,7 @@ function loadGlobalConfig() {
                 qqGroupNumber: String(data.groupVerify.qqGroupNumber || '').trim(),
                 verifyUrl: String(data.groupVerify.verifyUrl || '').trim(),
                 verifyToken: String(data.groupVerify.verifyToken || '').trim(),
+                verifyMode: normalizeGroupVerifyMode(data.groupVerify.verifyMode),
                 timeoutMs: Math.max(1000, Math.min(15000, Number(data.groupVerify.timeoutMs) || DEFAULT_GROUP_VERIFY_CONFIG.timeoutMs))
             };
         }
@@ -1853,6 +1855,11 @@ function setCaptureConfig(config) {
 
 // ==================== QQ 群验证 ====================
 
+function normalizeGroupVerifyMode(value) {
+    const mode = String(value || '').trim().toLowerCase();
+    return mode === 'napcat' ? 'napcat' : '';
+}
+
 function getGroupVerifyConfig() {
     return globalConfig.groupVerify
         ? { ...globalConfig.groupVerify }
@@ -1869,6 +1876,9 @@ function setGroupVerifyConfig(config) {
         verifyToken: config.verifyToken === undefined || config.verifyToken === null || config.verifyToken === ''
             ? current.verifyToken
             : String(config.verifyToken).trim(),
+        verifyMode: config.verifyMode === undefined || config.verifyMode === null || config.verifyMode === ''
+            ? current.verifyMode
+            : normalizeGroupVerifyMode(config.verifyMode),
         timeoutMs: Math.max(1000, Math.min(15000, Number(config.timeoutMs) || current.timeoutMs || DEFAULT_GROUP_VERIFY_CONFIG.timeoutMs))
     };
     saveGlobalConfig();

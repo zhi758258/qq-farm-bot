@@ -32,6 +32,7 @@ export interface GroupVerifyConfig {
   qqGroupNumber: string
   verifyUrl: string
   verifyToken: string
+  verifyMode: string
   timeoutMs: number
 }
 
@@ -45,6 +46,7 @@ export interface GroupVerifyTestResult {
   responseBody?: unknown
   requestUrl?: string
   durationMs?: number
+  memberCount?: number
 }
 
 interface UseAdminSystemConfigOptions {
@@ -82,6 +84,7 @@ const defaultGroupVerifyConfig: GroupVerifyConfig = {
   qqGroupNumber: '',
   verifyUrl: '',
   verifyToken: '',
+  verifyMode: '',
   timeoutMs: 5000,
 }
 

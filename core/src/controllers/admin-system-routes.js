@@ -121,7 +121,7 @@ function registerAdminSystemRoutes({
     requireAdminRole,
     (req, res) => {
       try {
-        const { enabled, qqGroupNumber, verifyUrl, verifyToken, timeoutMs } = req.body || {};
+        const { enabled, qqGroupNumber, verifyUrl, verifyToken, verifyMode, timeoutMs } = req.body || {};
         if (enabled === true) {
           const url = String(verifyUrl || "").trim();
           if (!url) {
@@ -139,6 +139,7 @@ function registerAdminSystemRoutes({
           qqGroupNumber,
           verifyUrl,
           verifyToken,
+          verifyMode,
           timeoutMs,
         });
         logger.warn("更新QQ群验证配置", {
@@ -146,6 +147,7 @@ function registerAdminSystemRoutes({
           enabled: saved?.enabled === true,
           qqGroupNumber: saved?.qqGroupNumber || "",
           verifyUrl: saved?.verifyUrl || "",
+          verifyMode: saved?.verifyMode || "",
         });
         res.json({ ok: true, data: saved });
       } catch (error) {

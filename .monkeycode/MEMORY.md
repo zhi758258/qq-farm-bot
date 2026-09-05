@@ -33,6 +33,16 @@ Entries discovered by the Agent during task execution should follow this format:
 
 [Project Knowledge Summary]
 - Date: 2026-09-05
+- Context: Discovered by Agent while 修复 QQ 群验证（NapCat 直连）
+- Category: Operations & Deployment
+- Instructions:
+  - 群验证支持两种验证方式（`core/data/store.json` → `groupVerify.verifyMode`）：`''`/空为通用 GET 校验接口（旧约定，`GET ?qq=&group=`，NapCat 不适用），`'napcat'` 为 bot 直连 NapCat/OneBot11 正向 HTTP（配置 NapCat HTTP 地址 + QQ群号 + NapCat access_token；后端 POST `get_group_member_list` 按 user_id 判成员）。
+  - NapCat 的正向 HTTP 服务器根路径对 GET 只返回 `{"message":"NapCat4 Is Running"}`，不执行查群成员；查成员必须用 POST action。若后台把验证地址直填 NapCat 根且不开鉴权，NapCat 会拒绝所有 action 返回 `token verify failed!`，需在群验证卡片填 NapCat 的 access_token。
+  - 改动文件：`core/src/controllers/admin-auth-routes.js`（verifyGenericMembership/verifyNapcatMembership）、`core/src/models/store.js`（DEFAULT_GROUP_VERIFY_CONFIG 含 verifyMode）、`core/src/controllers/admin-system-routes.js`（透传 verifyMode）、`web/src/components/admin/AdminGroupVerifyCard.vue`（验证方式下拉）、`core/test/group-verify-napcat.test.js`。
+  - 群验证配置保存在 3007 后台「系统配置 → QQ群验证」卡片；改后端 `store.js` 后须重启 `pnpm -C core dev` 才生效（node 不热加载）。
+
+[Project Knowledge Summary]
+- Date: 2026-09-05
 - Context: Discovered by Agent while 移植用户/卡密/公告/群验证系统并完成账号私有化与账号改名
 - Category: Operations & Deployment
 - Instructions:

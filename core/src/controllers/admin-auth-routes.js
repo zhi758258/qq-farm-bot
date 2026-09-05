@@ -2,15 +2,43 @@ const fetch = require("node-fetch");
 
 const ADMIN_LOGIN_LOG_LIMIT = 200;
 
-async function verifyGroupMembership(qq, config) {
+function normalizeVerifyMode(mode) {
+  return String(mode || "").trim().toLowerCase() === "napcat" ? "napcat" : "";
+}
+
+function verifyClampTimeout(value) {
+  return Math.max(1000, Math.min(15000, Number(value) || 5000));
+}
+
+function memberListIncludes(members, qq) {
+  if (!Array.isArray(members)) return false;
+  const target = Number(String(qq || "").trim());
+  if (Number.isNaN(target)) return false;
+  return members.some((m) => {
+    if (!m || typeof m !== "object") return false;
+    const id = m.user_id !== undefined ? m.user_id : m.uin;
+    return Number(id) === target;
+  });
+}
+
+async function requestWithTimeout(url, options, timeoutMs) {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
+  try {
+    return await fetch(url, { ...options, signal: controller.signal });
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+/* 通用 GET 群成员校验接口（verifyUrl + ?qq=&group=） */
+async function verifyGenericMembership(qq, config) {
   const verifyUrl = String(config && config.verifyUrl || "").trim();
   const qqNumber = String(qq || "").trim();
   if (!verifyUrl) return { inGroup: false, error: "not_configured" };
   if (!qqNumber) return { inGroup: false, error: "no_qq" };
 
-  const timeoutMs = Math.max(1000, Math.min(15000, Number(config.timeoutMs) || 5000));
-  const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), timeoutMs);
+  const timeoutMs = verifyClampTimeout(config.timeoutMs);
   const startedAt = Date.now();
   let requestUrl = "";
   try {
@@ -22,12 +50,7 @@ async function verifyGroupMembership(qq, config) {
     const headers = {};
     const token = String(config.verifyToken || "").trim();
     if (token) headers.Authorization = `Bearer ${token}`;
-    const response = await fetch(requestUrl, {
-      method: "GET",
-      headers,
-      signal: controller.signal,
-      redirect: "follow",
-    });
+    const response = await requestWithTimeout(requestUrl, { method: "GET", headers, redirect: "follow" }, timeoutMs);
     const durationMs = Date.now() - startedAt;
     if (!response.ok) {
       return {
@@ -80,9 +103,110 @@ async function verifyGroupMembership(qq, config) {
       requestUrl,
       durationMs: Date.now() - startedAt,
     };
-  } finally {
-    clearTimeout(timer);
   }
+}
+
+/* NapCat / OneBot11 正向 HTTP：POST get_group_member_list 拉取群成员比对 */
+async function verifyNapcatMembership(qq, config) {
+  const baseUrl = String(config && config.verifyUrl || "").trim();
+  const qqNumber = String(qq || "").trim();
+  if (!baseUrl) return { inGroup: false, error: "not_configured" };
+  if (!qqNumber) return { inGroup: false, error: "no_qq" };
+  const group = String(config.qqGroupNumber || "").trim();
+  if (!group) return { inGroup: false, error: "no_group" };
+
+  const timeoutMs = verifyClampTimeout(config.timeoutMs);
+  const startedAt = Date.now();
+  const requestUrl = baseUrl;
+  try {
+    const headers = { "Content-Type": "application/json" };
+    const token = String(config.verifyToken || "").trim();
+    if (token) headers.Authorization = `Bearer ${token}`;
+    const body = {
+      action: "get_group_member_list",
+      params: { group_id: Number(group) },
+      echo: `qqfarm_verify_${startedAt}`,
+    };
+    const response = await requestWithTimeout(
+      requestUrl,
+      {
+        method: "POST",
+        headers,
+        body: JSON.stringify(body),
+        redirect: "follow",
+      },
+      timeoutMs,
+    );
+    const durationMs = Date.now() - startedAt;
+    if (!response.ok) {
+      return {
+        inGroup: false,
+        error: "service_unavailable",
+        httpStatus: response.status,
+        requestUrl,
+        durationMs,
+      };
+    }
+    const text = await response.text();
+    let payload;
+    try {
+      payload = JSON.parse(text);
+    } catch {
+      payload = undefined;
+    }
+    if (typeof payload === "undefined") {
+      return {
+        inGroup: false,
+        error: "invalid_response",
+        httpStatus: response.status,
+        responseBody: String(text).slice(0, 500),
+        requestUrl,
+        durationMs,
+      };
+    }
+    const retcode = Number(payload.retcode);
+    const members = payload && payload.data;
+    if (retcode !== 0 || !Array.isArray(members)) {
+      const message = String(payload && payload.message || "");
+      return {
+        inGroup: false,
+        error: "service_unavailable",
+        errorMessage: message ? `NapCat 返回错误：${message}` : "无法从 NapCat 获取群成员列表",
+        httpStatus: response.status,
+        responseBody: payload,
+        requestUrl,
+        durationMs,
+      };
+    }
+    const inGroup = memberListIncludes(members, qqNumber);
+    return {
+      inGroup,
+      error: inGroup ? "" : "not_in_group",
+      httpStatus: response.status,
+      responseBody: payload,
+      requestUrl,
+      durationMs,
+      memberCount: Array.isArray(members) ? members.length : 0,
+    };
+  } catch (err) {
+    return {
+      inGroup: false,
+      error: "service_unavailable",
+      errorMessage:
+        err && err.name === "AbortError"
+          ? `请求超时（${timeoutMs}ms）`
+          : String((err && err.message) || err),
+      requestUrl,
+      durationMs: Date.now() - startedAt,
+    };
+  }
+}
+
+async function verifyGroupMembership(qq, config) {
+  if (config && normalizeVerifyMode(config.verifyMode) === "napcat") {
+    return verifyNapcatMembership(qq, config);
+  }
+  return verifyGenericMembership(qq, config);
 }
 
 function requireAuthUser(req, res) {
@@ -431,4 +555,9 @@ function registerAdminAuthRoutes({
   );
 }
 
-module.exports = { registerAdminAuthRoutes, verifyGroupMembership };
+module.exports = {
+  registerAdminAuthRoutes,
+  verifyGroupMembership,
+  memberListIncludes,
+  normalizeVerifyMode,
+};
