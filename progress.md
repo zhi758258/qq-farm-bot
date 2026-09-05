@@ -8,6 +8,9 @@
 
 # 当前状态
 
+- 用户/卡密/公告/QQ群验证系统已按 https://github.com/a283405278/qq-farm-bot2 移植进本仓库并全链路验证通过（详见文末 2026-09-05 小节）。默认超管 admin/admin（mustChangePassword=true，登录后会引导改密），普通用户需持卡密注册，账号上限默认 2。
+- 移植后沿用既有 bot2 登录语义：登录接口为 `POST /api/login`（非旧的 /api/admin/login），注册凭 `cardCode`；前端不再调用 /api/auto-login，路由守卫用 `/api/auth/validate`。
+- 后端全量测试 295/295 通过；前端 build 通过；本批触碰的 web/core 文件 targeted ESLint 干净。`core` 全量 ESLint 仍有 13 个基线噪音（admin-system-routes.js 的 loginLogoUpload/deleteManagedLoginLogo/requireSuperAdminRole/isAllowedPublicLink/isAllowedImageLink、admin.js 的 ONE_MINUTE_MS/invalidateAdminSessions 均 unused），为改动前 HEAD 已存在，未修。
 - TSDK/ACE 安全链路已升级到 QQ Mac 客户端 2026-08-20 10:32 包内的官方
   `v3.9.0.1787057219` WASM（161114 字节，SHA-256
   `98cc5301cff10f5b87a014d0a4af92630e4a6e91292cc7de5eb86422275f0070`）。
@@ -100,8 +103,19 @@
 - 不把全站 lint、全站格式化、全站类型改造作为默认目标；只有用户明确要求或分阶段收敛到位后再做。
 - 要记得及时更新本文件
 
-## 2026-07-06 TSDK / ACE 修复
+## 2026-09-05 用户/卡密/公告/QQ群验证系统移植
 
+- 来源：bot2（https://github.com/a283405278/qq-farm-bot2，HEAD adae34c）；目标保留 HEAD 5937ce6 的钻石网关等既有修复，`worker.js`、`network.js`、`admin-farm-resource-routes.js` 未触碰。
+- 后端：`models/user-store.js` 由 15 行 stub 全量替换为 bot2 版（1128 行），`DEFAULT_ACCOUNT_LIMIT=2`，默认超管改为 `admin/admin`（mustChangePassword 首次登录引导改密）；`admin-auth-routes.js`、`admin-user-manage-routes.js`、`admin-announcement-routes.js`、`admin-session-manager.js`、`admin-current-user-routes.js` 均迁为 bot2 版并接入 `admin.js`；会话管理改为每请求从 userStore 刷新（删除/封禁/过期即时 401/403）。注册必须凭卡密，卡密创建/编辑/删除/批量删除、登录日志、用户封禁/续费/编辑/清理到期走 `registerUserManageRoutes`。
+- 公告：`store.js` announcement 增加 `enabled` 字段与开关签名，已读/展示逻辑按内容时间戳判断。
+- 群验证：`store.js` 新增 `groupVerify` 配置（enabled/qqGroupNumber/verifyUrl/verifyToken/timeoutMs）；登录仅对普通用户校验“注册 QQ 已入群”，管理员豁免；未入群返回 `NOT_IN_GROUP` + “请先加入QQ群后再登录”，服务不可用返回单独提示；`/api/admin/group-verify` 提供 GET/POST 配置与 POST test。启用的前置：URL 以 http(s):// 开头且群号必填。默认关闭，开启由管理员在后台上操作。
+- 前端：`Login.vue`（登录/注册/找回/改密/卡密领取，副文案为“填写的 QQ 一定要加群，否则登录不了”，底部含独立“加QQ群”图标按钮并带群链接配置）、`AdminPanel.vue`、`AdminAnnouncement.vue`、`AnnouncementModal.vue`、`components/admin/AdminGroupVerifyCard.vue`、`router/index.ts`（登录/管理面板/公告路由，鉴权改 `/api/auth/validate`，不再调 /api/auto-login；保留 /renewal 与兜底重定向到首页）、`router/menu.ts`、`stores/user.ts`、`DefaultLayout.vue`、`Settings.vue`、`composables/useAdminSystemConfig.ts`；后台侧边栏用户卡新增“加QQ群”入口。设置页新增修改密码卡片、QQ群验证卡片、公告（只读）卡片；旧自动控制入口与账号设置共用同一批配置。
+- 修复竞态缺陷：`setAnnouncement` 用 `Math.max(Date.now(), prev+1)` 保证同毫秒内严格递增，导致 updatedAt 可能比真实时间快 1ms，`markAnnouncementRead` 存 `Date.now()` 时会出现“已读时间 < 公告时间”的 flaky 断言与瞬时误判。已将已读记录锚定为 `Math.max(旧记录, 当前公告 updatedAt)`，彻底去掉墙钟竞态；stress 3000 次 + announcement.test.js 连续 20 次全绿。
+- 验证：后端全量 `pnpm test` 295/295；`web` build（vue-tsc+vite）通过；本批触碰文件 targeted ESLint 干净（core 全量 13 个 unused 噪音与 web 的 CharityFlowerActivityPanel/StrategyTimingPanel lint 错误均为 HEAD 已存在基线，未修）。实时冒烟覆盖：admin/login、建卡、注册（缺 QQ/缺卡密拒绝）、登录、/api/auth/validate、/api/user/me、公告公开读/管理员写/已读、群验证开关三态（mock 群接口 100001 放行 / 200002 拦截 NOT_IN_GROUP / admin 豁免）、非管理员访问 /api/admin/* 返回 403。
+- 注意事项：Web 登录一律走 `POST /api/login`；新增注册需要卡密（后台 AdminPanel 卡密页建卡）；首次上线默认群验证关闭，需要开启请在 设置 → 后台（管理面板）→ 系统配置的 QQ群验证卡片填写接口地址与群号并保存。
+- 后续待用户人工验收：桌面/移动视口下登录页、后台页、公告弹窗与“加QQ群”入口的视觉与交互；真实群接口的入群/未入群登录效果。
+
+## 2026-07-06 TSDK / ACE 修复
 - 已对官方 `game.js` 完成关键静态去混淆：官方调用为
   `SdkInitEx(3167, 0)`；`AnoUserLogin(0, openId)` 仅维护账号身份。
 - 官方网关 Token 来自 `AceManager.randomStr()`，格式为 64～127 个字母数字字符
