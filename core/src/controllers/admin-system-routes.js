@@ -53,7 +53,6 @@ function registerAdminSystemRoutes({
   logger,
   requireAdminToken,
   requireAdminRole,
-  requireSuperAdminRole,
   requireDangerConfirmation,
   getDefaultSystemConfig,
   getRuntimeConfig,
@@ -101,6 +100,125 @@ function registerAdminSystemRoutes({
       res.status(500).json({ ok: false, error: error.message });
     }
   });
+
+  const cleanLoginLinkText = (value) => String(value ?? "").trim().slice(0, 200);
+
+  app.get(
+    "/api/admin/login-links",
+    requireAdminToken,
+    requireAdminRole,
+    (req, res) => {
+      try {
+        res.json({ ok: true, data: store.getLoginLinks() });
+      } catch (error) {
+        res.status(500).json({ ok: false, error: error.message });
+      }
+    },
+  );
+
+  app.post(
+    "/api/admin/login-links",
+    requireAdminToken,
+    requireAdminRole,
+    (req, res) => {
+      try {
+        const { logoUrl, title, loginSubtitle, registerSubtitle, purchaseUrl, qqGroupUrl } = req.body || {};
+        const checkImage = (value) => {
+          const link = String(value ?? "").trim();
+          return !link || isAllowedImageLink(link);
+        };
+        const checkPublic = (value) => {
+          const link = String(value ?? "").trim();
+          return !link || isAllowedPublicLink(link);
+        };
+        if (!checkImage(logoUrl)) {
+          return res.status(400).json({ ok: false, error: "登录图标地址仅支持 http(s) 或站内路径" });
+        }
+        if (!checkPublic(purchaseUrl)) {
+          return res.status(400).json({ ok: false, error: "购买/开通地址仅支持 http(s)、mqqapi 或站内路径" });
+        }
+        if (!checkPublic(qqGroupUrl)) {
+          return res.status(400).json({ ok: false, error: "加QQ群链接仅支持 http(s)、mqqapi 或站内路径" });
+        }
+        const saved = store.setLoginLinks({
+          logoUrl,
+          title: cleanLoginLinkText(title),
+          loginSubtitle: cleanLoginLinkText(loginSubtitle),
+          registerSubtitle: cleanLoginLinkText(registerSubtitle),
+          purchaseUrl,
+          qqGroupUrl,
+        });
+        logger.warn("更新登录页设置", {
+          admin: req.currentUser?.username || "",
+          title: saved?.title || "",
+          hasLogo: !!saved?.logoUrl,
+          hasPurchaseUrl: !!saved?.purchaseUrl,
+          hasQqGroupUrl: !!saved?.qqGroupUrl,
+        });
+        res.json({ ok: true, data: saved });
+      } catch (error) {
+        res.status(500).json({ ok: false, error: error.message });
+      }
+    },
+  );
+
+  app.post(
+    "/api/admin/login-links/reset",
+    requireAdminToken,
+    requireAdminRole,
+    (req, res) => {
+      try {
+        const current = store.getLoginLinks();
+        deleteManagedLoginLogo(current.logoUrl);
+        const saved = store.setLoginLinks({
+          logoUrl: "",
+          title: "",
+          loginSubtitle: "",
+          registerSubtitle: "",
+          purchaseUrl: "",
+          qqGroupUrl: "",
+        });
+        logger.warn("重置登录页设置为默认值", {
+          admin: req.currentUser?.username || "",
+        });
+        res.json({ ok: true, data: saved });
+      } catch (error) {
+        res.status(500).json({ ok: false, error: error.message });
+      }
+    },
+  );
+
+  app.post(
+    "/api/admin/login-logo",
+    requireAdminToken,
+    requireAdminRole,
+    (req, res) => {
+      loginLogoUpload(req, res, (uploadError) => {
+        try {
+          if (uploadError) {
+            const message = uploadError.code === "LIMIT_FILE_SIZE"
+              ? "图片大小不能超过 2MB"
+              : String(uploadError.message || "图片上传失败");
+            return res.status(400).json({ ok: false, error: message });
+          }
+          if (!req.file) {
+            return res.status(400).json({ ok: false, error: "未收到图片文件" });
+          }
+          const current = store.getLoginLinks();
+          const newLogoUrl = `/login-assets/${req.file.filename}`;
+          const saved = store.setLoginLinks({ ...current, logoUrl: newLogoUrl });
+          deleteManagedLoginLogo(current.logoUrl);
+          logger.warn("上传登录图标", {
+            admin: req.currentUser?.username || "",
+            logoUrl: newLogoUrl,
+          });
+          res.json({ ok: true, data: saved });
+        } catch (error) {
+          res.status(500).json({ ok: false, error: error.message });
+        }
+      });
+    },
+  );
 
   app.get(
     "/api/admin/group-verify",
