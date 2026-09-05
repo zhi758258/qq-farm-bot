@@ -510,24 +510,24 @@ onMounted(() => {
               >购买卡密</a>
             </template>
           </div>
-          <button
-            type="button"
-            class="group flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-medium transition-colors hover:opacity-85"
-            style="color: var(--theme-primary); background: color-mix(in srgb, var(--theme-primary) 12%, transparent);"
-            :title="appStore.loginPageConfig.qqGroupUrl ? '点击加入QQ群' : '加群链接暂未配置'"
-            @click="handleJoinGroup"
+          <div v-if="gameVersion" class="text-xs opacity-25">
+            游戏版本：{{ gameVersion }}
+          </div>
+        </div>
+        <button
+          type="button"
+          class="mx-auto mt-2.5 flex items-center gap-2 rounded-full px-4 py-1.5 text-sm font-medium transition-all hover:opacity-85 hover:shadow-sm"
+          style="color: var(--theme-primary); background: color-mix(in srgb, var(--theme-primary) 12%, transparent);"
+          :title="appStore.loginPageConfig.qqGroupUrl ? '点击加入QQ群' : '加群链接暂未配置'"
+          @click="handleJoinGroup"
+        >
+          <img
+            src="/qq-group.png"
+            alt="加QQ群"
+            class="h-6 w-6 rounded-full object-cover ring-1 ring-white/60 dark:ring-black/30"
           >
-            <img
-              src="/qq-group.png"
-              alt="加QQ群"
-              class="h-[18px] w-[18px] rounded-full object-cover ring-1 ring-white/50 dark:ring-black/30"
-            >
-            <span>加QQ群</span>
-          </button>
-        </div>
-        <div v-if="gameVersion" class="mt-1 text-xs opacity-25">
-          游戏版本：{{ gameVersion }}
-        </div>
+          <span>加QQ群</span>
+        </button>
       </div>
     </div>
 
