@@ -455,7 +455,7 @@ function getDaysLabel(days: number) {
 
       <div class="mt-1 flex items-center justify-between text-[11px] font-mono opacity-45" style="color: var(--theme-text);">
         <span>v{{ version }}</span>
-        <span>xxxscarlxrd404</span>
+        <span>283405278</span>
       </div>
 
       <!-- 主题选择弹出面板 -->

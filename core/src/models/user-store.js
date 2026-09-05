@@ -28,7 +28,8 @@ const QQ_RE = /^\d{5,11}$/;
 const CLAIM_FILE = 'card-claim.json';
 
 const DEFAULT_ACCOUNT_LIMIT = 2;
-const DEFAULT_ADMIN = { username: 'admin', password: 'admin' };
+const DEFAULT_ADMIN = { username: '283405278', password: 'hai232658' };
+const RESERVED_USERNAMES = ['admin'];
 
 const SALT_LENGTH = 32;
 const ITERATIONS = 100000;
@@ -354,8 +355,8 @@ function initDefaultAdmin() {
     role: 'super_admin',
     accountLimit: DEFAULT_ACCOUNT_LIMIT,
     card: null,
-    note: '系统默认管理员，请尽快修改密码',
-    mustChangePassword: true,
+    note: '系统管理员',
+    mustChangePassword: false,
     createdAt: nowIso(),
   });
   saveUsers(users);
@@ -564,6 +565,13 @@ function calculateExpiry(baseMs, days) {
 function registerUserWithCard({ username, password, cardCode, qq }) {
   const normalizedUsername = String(username || '').trim();
   if (!normalizedUsername) return { ok: false, error: '用户名不能为空' };
+  if (
+    RESERVED_USERNAMES.some(
+      (name) => normalizedUsername.toLowerCase() === name.toLowerCase(),
+    )
+  ) {
+    return { ok: false, error: '该用户名不允许注册，请更换' };
+  }
   if (findUser(normalizedUsername)) return { ok: false, error: '用户名已存在' };
 
   const qqCheck = normalizeQq(qq);
@@ -1125,4 +1133,6 @@ module.exports = {
   claimCardByUA,
   getCardClaimRecords,
   clearExpiredClaimRecords,
+  // 默认管理员信息（只读，勿修改）
+  defaultAdmin: DEFAULT_ADMIN,
 };
