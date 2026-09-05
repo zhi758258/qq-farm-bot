@@ -3,6 +3,8 @@ const fs = require("node:fs");
 const path = require("node:path");
 const multer = require("multer");
 const { getDataFile } = require("../config/runtime-paths");
+const { normalizeQq } = require("../models/user-store");
+const { verifyGroupMembership } = require("./admin-auth-routes");
 
 const LOGIN_ASSETS_DIR = getDataFile("login-assets");
 const LOGIN_LOGO_MAX_BYTES = 2 * 1024 * 1024;
@@ -99,6 +101,99 @@ function registerAdminSystemRoutes({
       res.status(500).json({ ok: false, error: error.message });
     }
   });
+
+  app.get(
+    "/api/admin/group-verify",
+    requireAdminToken,
+    requireAdminRole,
+    (req, res) => {
+      try {
+        res.json({ ok: true, data: store.getGroupVerifyConfig() });
+      } catch (error) {
+        res.status(500).json({ ok: false, error: error.message });
+      }
+    },
+  );
+
+  app.post(
+    "/api/admin/group-verify",
+    requireAdminToken,
+    requireAdminRole,
+    (req, res) => {
+      try {
+        const { enabled, qqGroupNumber, verifyUrl, verifyToken, timeoutMs } = req.body || {};
+        if (enabled === true) {
+          const url = String(verifyUrl || "").trim();
+          if (!url) {
+            return res.status(400).json({ ok: false, error: "启用群验证时必须填写验证接口地址" });
+          }
+          if (!/^https?:\/\//i.test(url)) {
+            return res.status(400).json({ ok: false, error: "验证接口地址必须以 http:// 或 https:// 开头" });
+          }
+          if (!String(qqGroupNumber || "").trim()) {
+            return res.status(400).json({ ok: false, error: "启用群验证时必须填写QQ群号" });
+          }
+        }
+        const saved = store.setGroupVerifyConfig({
+          enabled,
+          qqGroupNumber,
+          verifyUrl,
+          verifyToken,
+          timeoutMs,
+        });
+        logger.warn("更新QQ群验证配置", {
+          admin: req.currentUser?.username || "",
+          enabled: saved?.enabled === true,
+          qqGroupNumber: saved?.qqGroupNumber || "",
+          verifyUrl: saved?.verifyUrl || "",
+        });
+        res.json({ ok: true, data: saved });
+      } catch (error) {
+        res.status(500).json({ ok: false, error: error.message });
+      }
+    },
+  );
+
+  app.post(
+    "/api/admin/group-verify/test",
+    requireAdminToken,
+    requireAdminRole,
+    async (req, res) => {
+      try {
+        const { qq } = req.body || {};
+        const qqCheck = normalizeQq(qq);
+        if (!qqCheck.ok) {
+          return res.status(400).json({ ok: false, error: qqCheck.error });
+        }
+        const config = store.getGroupVerifyConfig();
+        if (!String(config.verifyUrl || "").trim()) {
+          return res
+            .status(400)
+            .json({ ok: false, error: "请先填写并保存群机器人验证接口地址" });
+        }
+        const result = await verifyGroupMembership(qqCheck.data, config);
+        logger.warn("测试QQ群验证接口", {
+          admin: req.currentUser?.username || "",
+          qq: qqCheck.data,
+          qqGroupNumber: config.qqGroupNumber || "",
+          verifyUrl: config.verifyUrl || "",
+          inGroup: result.inGroup === true,
+          error: result.error || "",
+          durationMs: result.durationMs || 0,
+        });
+        res.json({
+          ok: true,
+          data: {
+            qq: qqCheck.data,
+            qqGroupNumber: config.qqGroupNumber || "",
+            ...result,
+          },
+        });
+      } catch (error) {
+        res.status(500).json({ ok: false, error: error.message });
+      }
+    },
+  );
 
   app.post(
    "/api/admin/system-config",

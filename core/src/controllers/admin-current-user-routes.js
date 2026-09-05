@@ -26,6 +26,7 @@ function registerAdminCurrentUserRoutes({
           card: currentUser.card,
           accountLimit:
             currentUser.accountLimit || userStore.DEFAULT_ACCOUNT_LIMIT || 2,
+          mustChangePassword: currentUser.mustChangePassword === true,
         },
       });
     } catch (error) {

@@ -675,6 +675,14 @@ const DEFAULT_CAPTURE_CONFIG = {
     autoImportQqGids: true
 };
 
+const DEFAULT_GROUP_VERIFY_CONFIG = {
+    enabled: false,
+    qqGroupNumber: '',
+    verifyUrl: '',
+    verifyToken: '',
+    timeoutMs: 5000
+};
+
 let accountFallbackConfig = (() => {
     const cfg = { ...DEFAULT_ACCOUNT_CONFIG };
     cfg.automation = { ...DEFAULT_ACCOUNT_CONFIG.automation };
@@ -693,12 +701,13 @@ const globalConfig = {
     offlineReminder: { ...DEFAULT_OFFLINE_REMINDER },
     userOfflineReminders: {},
     adminPasswordHash: '',
-    announcement: { content: '', showOnce: true, updatedAt: 0 },
+    announcement: { content: '', showOnce: true, enabled: true, updatedAt: 0 },
     announcementReadRecords: {},
     superAdminAnnouncement: { content: '', password: '', updatedAt: 0 },
     systemConfig: null,
     loginLinks: null,
     captureConfig: null,
+    groupVerify: null,
     deviceProtocol: null,
     userDeviceProtocols: {},
     antiResaleConfig: null
@@ -979,6 +988,7 @@ function loadGlobalConfig() {
             globalConfig.announcement = {
                 content: String(data.announcement.content || '').trim(),
                 showOnce: data.announcement.showOnce !== false,
+                enabled: data.announcement.enabled !== false,
                 updatedAt: Number(data.announcement.updatedAt) || 0
             };
         }
@@ -1025,6 +1035,17 @@ function loadGlobalConfig() {
                 apiBase: String(data.captureConfig.apiBase || DEFAULT_CAPTURE_CONFIG.apiBase).trim(),
                 apiToken: String(data.captureConfig.apiToken || '').trim(),
                 autoImportQqGids: data.captureConfig.autoImportQqGids !== false
+            };
+        }
+
+        // QQ 群验证配置
+        if (data.groupVerify && typeof data.groupVerify === 'object') {
+            globalConfig.groupVerify = {
+                enabled: data.groupVerify.enabled === true,
+                qqGroupNumber: String(data.groupVerify.qqGroupNumber || '').trim(),
+                verifyUrl: String(data.groupVerify.verifyUrl || '').trim(),
+                verifyToken: String(data.groupVerify.verifyToken || '').trim(),
+                timeoutMs: Math.max(1000, Math.min(15000, Number(data.groupVerify.timeoutMs) || DEFAULT_GROUP_VERIFY_CONFIG.timeoutMs))
             };
         }
 
@@ -1702,15 +1723,17 @@ function getAnnouncement() {
     return {
         content: globalConfig.announcement?.content || '',
         showOnce: globalConfig.announcement?.showOnce ?? true,
+        enabled: globalConfig.announcement?.enabled ?? true,
         updatedAt: globalConfig.announcement?.updatedAt || 0
     };
 }
 
-function setAnnouncement(content, showOnce = true) {
+function setAnnouncement(content, showOnce = true, enabled = true) {
     globalConfig.announcement = {
         content: String(content || '').trim(),
         showOnce: !!showOnce,
-        updatedAt: Date.now()
+        enabled: enabled !== false,
+        updatedAt: Math.max(Date.now(), (globalConfig.announcement?.updatedAt || 0) + 1)
     };
     saveGlobalConfig();
     return getAnnouncement();
@@ -1724,13 +1747,16 @@ function getAnnouncementReadRecord(username) {
 function markAnnouncementRead(username) {
     if (!username) return;
     if (!globalConfig.announcementReadRecords) globalConfig.announcementReadRecords = {};
-    globalConfig.announcementReadRecords[username] = Date.now();
+    const announcement = getAnnouncement();
+    const previous = globalConfig.announcementReadRecords[username] || 0;
+    globalConfig.announcementReadRecords[username] = Math.max(previous, announcement.updatedAt);
     saveGlobalConfig();
 }
 
 function shouldShowAnnouncement(username) {
     const announcement = getAnnouncement();
     if (!announcement.content) return false;
+    if (announcement.enabled === false) return false;
     if (!username) return false;
     if (!announcement.showOnce) return true;
     return getAnnouncementReadRecord(username) < announcement.updatedAt;
@@ -1823,6 +1849,30 @@ function setCaptureConfig(config) {
     };
     saveGlobalConfig();
     return { ...globalConfig.captureConfig };
+}
+
+// ==================== QQ 群验证 ====================
+
+function getGroupVerifyConfig() {
+    return globalConfig.groupVerify
+        ? { ...globalConfig.groupVerify }
+        : { ...DEFAULT_GROUP_VERIFY_CONFIG };
+}
+
+function setGroupVerifyConfig(config) {
+    if (!config || typeof config !== 'object') return null;
+    const current = getGroupVerifyConfig();
+    globalConfig.groupVerify = {
+        enabled: config.enabled === true,
+        qqGroupNumber: String(config.qqGroupNumber ?? current.qqGroupNumber).trim(),
+        verifyUrl: String(config.verifyUrl ?? current.verifyUrl).trim(),
+        verifyToken: config.verifyToken === undefined || config.verifyToken === null || config.verifyToken === ''
+            ? current.verifyToken
+            : String(config.verifyToken).trim(),
+        timeoutMs: Math.max(1000, Math.min(15000, Number(config.timeoutMs) || current.timeoutMs || DEFAULT_GROUP_VERIFY_CONFIG.timeoutMs))
+    };
+    saveGlobalConfig();
+    return { ...globalConfig.groupVerify };
 }
 
 // ==================== 设备协议 ====================
@@ -2021,6 +2071,9 @@ module.exports = {
     getCaptureConfig,
     setCaptureConfig,
     DEFAULT_CAPTURE_CONFIG,
+    getGroupVerifyConfig,
+    setGroupVerifyConfig,
+    DEFAULT_GROUP_VERIFY_CONFIG,
     getDeviceProtocol,
     setDeviceProtocol,
     DEFAULT_DEVICE_PROTOCOL,
