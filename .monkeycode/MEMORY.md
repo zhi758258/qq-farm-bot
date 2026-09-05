@@ -36,9 +36,10 @@ Entries discovered by the Agent during task execution should follow this format:
 - Context: Discovered by Agent while 修复 QQ 群验证（NapCat 直连）
 - Category: Operations & Deployment
 - Instructions:
-  - 群验证支持两种验证方式（`core/data/store.json` → `groupVerify.verifyMode`）：`''`/空为通用 GET 校验接口（旧约定，`GET ?qq=&group=`，NapCat 不适用），`'napcat'` 为 bot 直连 NapCat/OneBot11 正向 HTTP（配置 NapCat HTTP 地址 + QQ群号 + NapCat access_token；后端 POST `get_group_member_list` 按 user_id 判成员）。
-  - NapCat 的正向 HTTP 服务器根路径对 GET 只返回 `{"message":"NapCat4 Is Running"}`，不执行查群成员；查成员必须用 POST action。若后台把验证地址直填 NapCat 根且不开鉴权，NapCat 会拒绝所有 action 返回 `token verify failed!`，需在群验证卡片填 NapCat 的 access_token。
-  - 改动文件：`core/src/controllers/admin-auth-routes.js`（verifyGenericMembership/verifyNapcatMembership）、`core/src/models/store.js`（DEFAULT_GROUP_VERIFY_CONFIG 含 verifyMode）、`core/src/controllers/admin-system-routes.js`（透传 verifyMode）、`web/src/components/admin/AdminGroupVerifyCard.vue`（验证方式下拉）、`core/test/group-verify-napcat.test.js`。
+  - 群验证支持两种验证方式（`core/data/store.json` → `groupVerify.verifyMode`）：`''`/空为通用 GET 校验接口（旧约定，`GET ?qq=&group=`，NapCat 不适用），`'napcat'` 为 bot 直连 NapCat/OneBot11 正向 HTTP（配置 NapCat HTTP 地址 + QQ群号 + NapCat access_token）。
+  - NapCat 的关键约束（2026-09-05 实测）：HTTP action 走 **URL 路径式**（如 `POST http://ip:3000/get_group_member_info`，body 直接放 params `{"group_id":..., "user_id":...}`）；根路径式（body `{action, params}`）NapCat 不识别，GET 根路径只回 `NapCat4 Is Running`。HTTP 服务开启鉴权后不带 access_token 所有 action 返回 `token verify failed!`。成员查询返回 `retcode:0 + data`，非成员返回 `Uin2Uid Error: 用户ID xxx 不存在`（应判 not_in_group，其余 NapCat 报错判 service_unavailable）。
+  - 改动文件：`core/src/controllers/admin-auth-routes.js`（verifyGenericMembership/verifyNapcatMembership，NapCat 用 get_group_member_info 单查，避免 get_group_member_list 只回 50 条截断）、`core/src/models/store.js`（DEFAULT_GROUP_VERIFY_CONFIG 含 verifyMode）、`core/src/controllers/admin-system-routes.js`（透传 verifyMode）、`web/src/components/admin/AdminGroupVerifyCard.vue`（验证方式下拉）、`core/test/group-verify-napcat.test.js`。
+  - 管理后台 admin API 鉴权头是 `x-admin-token`（不是 `Authorization: Bearer`）；curl 调 `/api/admin/*` 需带 `-H "x-admin-token: <登录token>"`。
   - 群验证配置保存在 3007 后台「系统配置 → QQ群验证」卡片；改后端 `store.js` 后须重启 `pnpm -C core dev` 才生效（node 不热加载）。
 
 [Project Knowledge Summary]

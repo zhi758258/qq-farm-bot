@@ -106,9 +106,18 @@ async function verifyGenericMembership(qq, config) {
   }
 }
 
-/* NapCat / OneBot11 正向 HTTP：POST get_group_member_list 拉取群成员比对 */
+/* NapCat / OneBot11 正向 HTTP：POST /get_group_member_info 精确查询单成员 */
+const NAPCAT_MEMBER_INFO_PATH = "/get_group_member_info";
+const NAPCAT_NON_MEMBER_RE = /不存在|未找到|not.*(?:found|member)|不在群/i;
+
+function napcatErrorKind(message) {
+  return NAPCAT_NON_MEMBER_RE.test(String(message || ""))
+    ? "not_in_group"
+    : "service_unavailable";
+}
+
 async function verifyNapcatMembership(qq, config) {
-  const baseUrl = String(config && config.verifyUrl || "").trim();
+  const baseUrl = String(config && config.verifyUrl || "").trim().replace(/\/+$/, "");
   const qqNumber = String(qq || "").trim();
   if (!baseUrl) return { inGroup: false, error: "not_configured" };
   if (!qqNumber) return { inGroup: false, error: "no_qq" };
@@ -117,15 +126,14 @@ async function verifyNapcatMembership(qq, config) {
 
   const timeoutMs = verifyClampTimeout(config.timeoutMs);
   const startedAt = Date.now();
-  const requestUrl = baseUrl;
+  const requestUrl = baseUrl + NAPCAT_MEMBER_INFO_PATH;
   try {
     const headers = { "Content-Type": "application/json" };
     const token = String(config.verifyToken || "").trim();
     if (token) headers.Authorization = `Bearer ${token}`;
     const body = {
-      action: "get_group_member_list",
-      params: { group_id: Number(group) },
-      echo: `qqfarm_verify_${startedAt}`,
+      group_id: Number(group),
+      user_id: Number(qqNumber),
     };
     const response = await requestWithTimeout(
       requestUrl,
@@ -164,29 +172,30 @@ async function verifyNapcatMembership(qq, config) {
         durationMs,
       };
     }
-    const retcode = Number(payload.retcode);
-    const members = payload && payload.data;
-    if (retcode !== 0 || !Array.isArray(members)) {
-      const message = String(payload && payload.message || "");
+    const member =
+      payload.status === "ok" &&
+      Number(payload.retcode) === 0 &&
+      payload.data &&
+      typeof payload.data === "object";
+    if (member) {
       return {
-        inGroup: false,
-        error: "service_unavailable",
-        errorMessage: message ? `NapCat 返回错误：${message}` : "无法从 NapCat 获取群成员列表",
+        inGroup: true,
+        error: "",
         httpStatus: response.status,
-        responseBody: payload,
+        responseBody: payload.data,
         requestUrl,
         durationMs,
       };
     }
-    const inGroup = memberListIncludes(members, qqNumber);
+    const message = String(payload && payload.message || "");
     return {
-      inGroup,
-      error: inGroup ? "" : "not_in_group",
+      inGroup: false,
+      error: napcatErrorKind(message),
+      errorMessage: message ? `NapCat 返回错误：${message}` : "无法从 NapCat 获取群成员信息",
       httpStatus: response.status,
       responseBody: payload,
       requestUrl,
       durationMs,
-      memberCount: Array.isArray(members) ? members.length : 0,
     };
   } catch (err) {
     return {

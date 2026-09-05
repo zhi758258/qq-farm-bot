@@ -126,9 +126,10 @@ function responsePreview(result: GroupVerifyTestResult) {
       />
 
       <div v-if="isNapcat" class="rounded-2xl bg-gray-50 px-4 py-3 text-xs text-gray-500 dark:bg-gray-900/40 dark:text-gray-400">
-        直连模式：后端对 NapCat HTTP 地址发起 <code>POST get_group_member_list</code>，自动携带群号与
-        <code>access_token</code>；返回 <code>retcode: 0</code> 且 <code>data</code> 为成员数组即视为拉取成功，
-        随后按成员列表判断该QQ是否在群。NapCat 需开启「网络配置 → HTTP 服务器」正向端口。
+        直连模式：后端向 NapCat HTTP 地址发起 <code>POST /get_group_member_info</code> 精确查询单成员，
+        自动携带群号、QQ号与 <code>access_token</code>；返回 <code>retcode: 0</code> 且有成员数据即判定在群，
+        <code>Uin2Uid</code> 类错误（该QQ不存在于群）则判定不在群。NapCat 需开启「网络配置 → HTTP 服务器」正向端口，
+        且 action 走 URL 路径式（如 <code>http://地址:端口/get_group_member_info</code>）。
       </div>
       <div v-else class="rounded-2xl bg-gray-50 px-4 py-3 text-xs text-gray-500 dark:bg-gray-900/40 dark:text-gray-400">
         接口约定：GET 请求，自动附加 <code>qq</code> 与 <code>group</code> 参数；鉴权通过请求头
