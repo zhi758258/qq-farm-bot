@@ -27,6 +27,26 @@ export interface LoginLinks {
   qqGroupUrl: string
 }
 
+export interface GroupVerifyConfig {
+  enabled: boolean
+  qqGroupNumber: string
+  verifyUrl: string
+  verifyToken: string
+  timeoutMs: number
+}
+
+export interface GroupVerifyTestResult {
+  qq: string
+  qqGroupNumber?: string
+  inGroup: boolean
+  error: string
+  errorMessage?: string
+  httpStatus?: number
+  responseBody?: unknown
+  requestUrl?: string
+  durationMs?: number
+}
+
 interface UseAdminSystemConfigOptions {
   showAlert: (message: string, type?: 'primary' | 'danger') => void
 }
@@ -57,6 +77,14 @@ const defaultLoginLinks: LoginLinks = {
   qqGroupUrl: '',
 }
 
+const defaultGroupVerifyConfig: GroupVerifyConfig = {
+  enabled: false,
+  qqGroupNumber: '',
+  verifyUrl: '',
+  verifyToken: '',
+  timeoutMs: 5000,
+}
+
 export function useAdminSystemConfig(options: UseAdminSystemConfigOptions) {
   const systemConfigSaving = ref(false)
   const systemConfigLoading = ref(false)
@@ -64,6 +92,11 @@ export function useAdminSystemConfig(options: UseAdminSystemConfigOptions) {
   const captureConfigTesting = ref(false)
   const loginLinksSaving = ref(false)
   const loginLogoUploading = ref(false)
+  const groupVerifyLoading = ref(false)
+  const groupVerifySaving = ref(false)
+  const groupVerifyTesting = ref(false)
+  const groupVerifyTestQq = ref('')
+  const groupVerifyTestResult = ref<GroupVerifyTestResult | null>(null)
 
   const showResetSystemConfirm = ref(false)
   const showSaveSystemConfirm = ref(false)
@@ -73,6 +106,7 @@ export function useAdminSystemConfig(options: UseAdminSystemConfigOptions) {
   const defaultSystemConfig = ref<SystemConfig>({ ...defaultSystemConfigValues })
   const localCaptureConfig = ref<CaptureConfig>({ ...defaultCaptureConfig })
   const localLoginLinks = ref<LoginLinks>({ ...defaultLoginLinks })
+  const localGroupVerify = ref<GroupVerifyConfig>({ ...defaultGroupVerifyConfig })
 
   async function loadLoginLinks() {
     try {
@@ -299,6 +333,66 @@ export function useAdminSystemConfig(options: UseAdminSystemConfigOptions) {
     showResetSystemConfirm.value = true
   }
 
+  async function loadGroupVerify() {
+    groupVerifyLoading.value = true
+    try {
+      const { data } = await api.get('/api/admin/group-verify')
+      if (data?.ok && data.data)
+        localGroupVerify.value = { ...defaultGroupVerifyConfig, ...data.data, verifyToken: '' }
+    }
+    catch (e: any) {
+      console.error('加载QQ群验证配置失败:', e)
+    }
+    finally {
+      groupVerifyLoading.value = false
+    }
+  }
+
+  async function handleSaveGroupVerify() {
+    groupVerifySaving.value = true
+    try {
+      const { data } = await api.post('/api/admin/group-verify', localGroupVerify.value)
+      if (data?.ok && data.data) {
+        localGroupVerify.value = { ...data.data, verifyToken: '' }
+        options.showAlert('QQ群验证配置已保存', 'primary')
+      }
+      else {
+        options.showAlert(data?.error || '保存失败', 'danger')
+      }
+    }
+    catch (e: any) {
+      options.showAlert(e?.response?.data?.error || `保存失败: ${e.message || '未知错误'}`, 'danger')
+    }
+    finally {
+      groupVerifySaving.value = false
+    }
+  }
+
+  async function handleTestGroupVerify() {
+    const qq = groupVerifyTestQq.value.trim()
+    if (!/^\d{5,11}$/.test(qq)) {
+      options.showAlert('请先填写 5-11 位数字的测试QQ号（需能判断是否在群内）', 'danger')
+      return
+    }
+    groupVerifyTesting.value = true
+    groupVerifyTestResult.value = null
+    try {
+      const { data } = await api.post('/api/admin/group-verify/test', { qq }, { timeout: 20000 })
+      if (data?.ok && data.data) {
+        groupVerifyTestResult.value = data.data
+      }
+      else {
+        options.showAlert(data?.error || '测试失败', 'danger')
+      }
+    }
+    catch (e: any) {
+      options.showAlert(e?.response?.data?.error || `测试失败: ${e.message || '未知错误'}`, 'danger')
+    }
+    finally {
+      groupVerifyTesting.value = false
+    }
+  }
+
   function openSaveSystemConfirm() {
     showSaveSystemConfirm.value = true
   }
@@ -327,6 +421,15 @@ export function useAdminSystemConfig(options: UseAdminSystemConfigOptions) {
     handleResetLoginLinks,
     openResetLoginLinksConfirm,
     handleUploadLoginLogo,
+    loadGroupVerify,
+    handleSaveGroupVerify,
+    localGroupVerify,
+    groupVerifyLoading,
+    groupVerifySaving,
+    groupVerifyTesting,
+    groupVerifyTestQq,
+    groupVerifyTestResult,
+    handleTestGroupVerify,
     loadSystemConfig,
     handleSaveSystemConfig,
     handleResetSystemConfig,

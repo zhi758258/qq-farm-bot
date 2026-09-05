@@ -2,6 +2,7 @@
 import { computed, nextTick, onMounted, ref, watch } from 'vue'
 import { useRoute } from 'vue-router'
 import api from '@/api'
+import AdminGroupVerifyCard from '@/components/admin/AdminGroupVerifyCard.vue'
 import AdminSystemPanel from '@/components/admin/AdminSystemPanel.vue'
 import ConfirmModal from '@/components/ConfirmModal.vue'
 import AccountFeatureSettings from '@/components/settings/AccountFeatureSettings.vue'
@@ -10,14 +11,17 @@ import AutoCodeRefreshCard from '@/components/settings/AutoCodeRefreshCard.vue'
 import DeviceProtocolCard from '@/components/settings/DeviceProtocolCard.vue'
 import OfflineReminderCard from '@/components/settings/OfflineReminderCard.vue'
 import BaseButton from '@/components/ui/BaseButton.vue'
+import BaseInput from '@/components/ui/BaseInput.vue'
 import { useAccountSettings } from '@/composables/settings/useAccountSettings'
 import { useAutomationSettings } from '@/composables/settings/useAutomationSettings'
 import { useStrategySettings } from '@/composables/settings/useStrategySettings'
 import { useUserSettings } from '@/composables/settings/useUserSettings'
 import { useAdminSystemConfig } from '@/composables/useAdminSystemConfig'
 import { useSettingStore } from '@/stores/setting'
+import { useUserStore } from '@/stores/user'
 
 const settingStore = useSettingStore()
+const userStore = useUserStore()
 const route = useRoute()
 
 type SettingsTabKey = 'account' | 'account-config' | 'notification' | 'system'
@@ -69,6 +73,12 @@ const tabs = [
 const modalVisible = ref(false)
 const defaultPlanSettingId = ref('')
 const defaultPlanApplyingId = ref('')
+const passwordSaving = ref(false)
+const passwordForm = ref({
+  oldPassword: '',
+  newPassword: '',
+  confirmPassword: '',
+})
 const defaultPlanConfirmation = ref<{
   action: 'set' | 'apply'
   account: any
@@ -103,6 +113,36 @@ function showAlert(message: string, type: 'primary' | 'danger' = 'primary') {
   modalVisible.value = true
 }
 
+async function handleChangePassword() {
+  const oldPassword = String(passwordForm.value.oldPassword || '').trim()
+  const newPassword = String(passwordForm.value.newPassword || '').trim()
+  const confirmPassword = String(passwordForm.value.confirmPassword || '').trim()
+
+  if (!oldPassword || !newPassword || !confirmPassword) {
+    showAlert('请完整填写密码信息', 'danger')
+    return
+  }
+  if (newPassword !== confirmPassword) {
+    showAlert('两次输入的新密码不一致', 'danger')
+    return
+  }
+
+  passwordSaving.value = true
+  try {
+    const result = await userStore.changePassword(oldPassword, newPassword)
+    if (!result?.ok)
+      throw new Error(result?.error || '密码修改失败')
+    passwordForm.value = { oldPassword: '', newPassword: '', confirmPassword: '' }
+    showAlert('密码已修改')
+  }
+  catch (error: any) {
+    showAlert(error.response?.data?.error || error.message || '密码修改失败', 'danger')
+  }
+  finally {
+    passwordSaving.value = false
+  }
+}
+
 const {
   systemConfigSaving,
   captureConfigSaving,
@@ -110,10 +150,19 @@ const {
   localSystemConfig,
   defaultSystemConfig,
   localCaptureConfig,
+  localGroupVerify,
+  groupVerifyLoading,
+  groupVerifySaving,
   platformOptions,
   osOptions,
   loadCaptureConfig,
   handleTestCaptureConfig,
+  loadGroupVerify,
+  handleSaveGroupVerify,
+  groupVerifyTesting,
+  groupVerifyTestQq,
+  groupVerifyTestResult,
+  handleTestGroupVerify,
   loadSystemConfig,
   handleResetSystemConfig,
 } = useAdminSystemConfig({ showAlert })
@@ -367,7 +416,7 @@ watch(currentAccountId, async () => {
 })
 
 onMounted(async () => {
-  await Promise.all([loadSystemConfig(), loadCaptureConfig()])
+  await Promise.all([loadSystemConfig(), loadCaptureConfig(), loadGroupVerify()])
   await fetchAccounts()
   await fetchDeviceProtocol()
   selectFirstAccountIfNeeded()
@@ -488,6 +537,40 @@ onMounted(async () => {
             @open-docs="openChannelDocs"
             @test="handleTestOffline"
           />
+
+          <section class="border border-gray-200 rounded-xl bg-white p-4 shadow-sm dark:border-gray-700 dark:bg-gray-800">
+            <div class="flex items-center justify-between gap-4">
+              <div>
+                <h3 class="text-base text-gray-900 font-bold dark:text-gray-100">
+                  账户安全
+                </h3>
+                <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">
+                  修改当前登录账号密码。首次登录默认管理员后，建议立即更新密码。
+                </p>
+              </div>
+              <BaseButton size="sm" :loading="passwordSaving" @click="handleChangePassword">
+                修改密码
+              </BaseButton>
+            </div>
+
+            <div class="grid mt-4 gap-3 md:grid-cols-3">
+              <BaseInput
+                v-model="passwordForm.oldPassword"
+                type="password"
+                placeholder="原密码"
+              />
+              <BaseInput
+                v-model="passwordForm.newPassword"
+                type="password"
+                placeholder="新密码"
+              />
+              <BaseInput
+                v-model="passwordForm.confirmPassword"
+                type="password"
+                placeholder="确认新密码"
+              />
+            </div>
+          </section>
         </div>
 
         <div v-else-if="activeTab === 'system'" class="space-y-5">
@@ -543,6 +626,17 @@ onMounted(async () => {
             :refreshing="autoCodeRefreshing"
             @save="saveAutoCodeRefreshSettings"
             @refresh="runAutoCodeRefreshNow"
+          />
+
+          <AdminGroupVerifyCard
+            v-model:config="localGroupVerify"
+            v-model:test-qq="groupVerifyTestQq"
+            :loading="groupVerifyLoading"
+            :saving="groupVerifySaving"
+            :testing="groupVerifyTesting"
+            :test-result="groupVerifyTestResult"
+            @save="handleSaveGroupVerify"
+            @test="handleTestGroupVerify"
           />
 
           <AdminSystemPanel
