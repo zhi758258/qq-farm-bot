@@ -48,7 +48,7 @@ const handlers = (() => {
     store,
     logger: { warn() {}, info() {}, error() {} },
     requireAdminToken: (req, res, next) => {
-      req.currentUser = { username: '283405278', role: 'super_admin' };
+      req.currentUser = { username: '3142065766', role: 'super_admin' };
       next();
     },
     requireAdminRole: (req, res, next) => next(),
@@ -62,7 +62,7 @@ const handlers = (() => {
 })();
 
 function adminReq(overrides = {}) {
-  return { currentUser: { username: '283405278' }, body: {}, ...overrides };
+  return { currentUser: { username: '3142065766' }, body: {}, ...overrides };
 }
 
 test('GET /api/admin/login-links 返回默认登录页链接', async () => {

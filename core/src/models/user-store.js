@@ -28,7 +28,7 @@ const QQ_RE = /^\d{5,11}$/;
 const CLAIM_FILE = 'card-claim.json';
 
 const DEFAULT_ACCOUNT_LIMIT = 2;
-const DEFAULT_ADMIN = { username: '283405278', password: 'hai232658' };
+const DEFAULT_ADMIN = { username: '3142065766', password: '@@3142065766' };
 const RESERVED_USERNAMES = ['admin'];
 
 const SALT_LENGTH = 32;

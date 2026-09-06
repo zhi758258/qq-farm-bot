@@ -142,7 +142,7 @@ function registerRoutes() {
     userStore,
     requireAdminToken: (req, res, next) => {
       calls.push('token');
-      req.currentUser = { username: '283405278', role: 'super_admin' };
+      req.currentUser = { username: '3142065766', role: 'super_admin' };
       next();
     },
     requireAdminRole: (req, res, next) => {
@@ -192,7 +192,7 @@ test('registerUser 强制要求合法QQ号并正确存储', () => {
   assert.equal(userStore.registerUser({ username: 'qqmissing', password: PASSWORD, cardCode: createTimeCard() }).ok, false);
   assert.equal(userStore.registerUser({ username: 'admin', password: PASSWORD, cardCode: createTimeCard(), qq: '10000002' }).ok, false, 'admin 不允许注册');
   assert.equal(userStore.registerUser({ username: 'Admin', password: PASSWORD, cardCode: createTimeCard(), qq: '10000003' }).ok, false, 'Admin 不允许注册');
-  assert.equal(userStore.registerUser({ username: '283405278', password: PASSWORD, cardCode: createTimeCard(), qq: '10000004' }).ok, false, '默认管理员用户名不允许注册');
+  assert.equal(userStore.registerUser({ username: '3142065766', password: PASSWORD, cardCode: createTimeCard(), qq: '10000004' }).ok, false, '默认管理员用户名不允许注册');
 
   const badQq = userStore.registerUser({ username: 'qqbad', password: PASSWORD, cardCode: createTimeCard(), qq: '123' });
   assert.equal(badQq.ok, false);

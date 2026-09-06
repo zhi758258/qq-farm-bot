@@ -58,7 +58,7 @@ function registerRoutes() {
     store,
     logger: { warn() {}, info() {}, error() {} },
     requireAdminToken: (req, res, next) => {
-      req.currentUser = { username: '283405278', role: 'super_admin' };
+      req.currentUser = { username: '3142065766', role: 'super_admin' };
       next();
     },
     requireAdminRole: (req, res, next) => next(),
@@ -82,7 +82,7 @@ test.after(() => {
 test('POST /api/admin/group-verify/test 缺少QQ号返回400', async () => {
   const handlers = registerRoutes();
   const res = createRes();
-  await invoke(handlers.post, '/api/admin/group-verify/test', { body: {}, currentUser: { username: '283405278' } }, res);
+  await invoke(handlers.post, '/api/admin/group-verify/test', { body: {}, currentUser: { username: '3142065766' } }, res);
   assert.equal(res.statusCode, 400);
   assert.equal(res.payload.ok, false);
   assert.match(res.payload.error, /QQ号/);
@@ -91,7 +91,7 @@ test('POST /api/admin/group-verify/test 缺少QQ号返回400', async () => {
 test('POST /api/admin/group-verify/test 非法QQ号返回400', async () => {
   const handlers = registerRoutes();
   const res = createRes();
-  await invoke(handlers.post, '/api/admin/group-verify/test', { body: { qq: 'abc12' }, currentUser: { username: '283405278' } }, res);
+  await invoke(handlers.post, '/api/admin/group-verify/test', { body: { qq: 'abc12' }, currentUser: { username: '3142065766' } }, res);
   assert.equal(res.statusCode, 400);
   assert.equal(res.payload.ok, false);
 });
@@ -100,7 +100,7 @@ test('POST /api/admin/group-verify/test 未配置验证接口返回400', async (
   store.setGroupVerifyConfig({ enabled: false, verifyUrl: '' });
   const handlers = registerRoutes();
   const res = createRes();
-  await invoke(handlers.post, '/api/admin/group-verify/test', { body: { qq: '10000001' }, currentUser: { username: '283405278' } }, res);
+  await invoke(handlers.post, '/api/admin/group-verify/test', { body: { qq: '10000001' }, currentUser: { username: '3142065766' } }, res);
   assert.equal(res.statusCode, 400);
   assert.match(res.payload.error, /验证接口地址/);
 });
@@ -118,7 +118,7 @@ test('POST /api/admin/group-verify/test 在群时返回成功诊断', async () =
   mockState.body = JSON.stringify({ ok: true, data: { inGroup: true } });
   const handlers = registerRoutes();
   const res = createRes();
-  await invoke(handlers.post, '/api/admin/group-verify/test', { body: { qq: '10000001' }, currentUser: { username: '283405278' } }, res);
+  await invoke(handlers.post, '/api/admin/group-verify/test', { body: { qq: '10000001' }, currentUser: { username: '3142065766' } }, res);
   assert.equal(res.statusCode, 200);
   assert.equal(res.payload.ok, true);
   assert.equal(res.payload.data.inGroup, true);
@@ -137,7 +137,7 @@ test('POST /api/admin/group-verify/test 兼容data.inGroup响应', async () => {
   mockState.body = JSON.stringify({ data: { inGroup: true } });
   const handlers = registerRoutes();
   const res = createRes();
-  await invoke(handlers.post, '/api/admin/group-verify/test', { body: { qq: '10000002' }, currentUser: { username: '283405278' } }, res);
+  await invoke(handlers.post, '/api/admin/group-verify/test', { body: { qq: '10000002' }, currentUser: { username: '3142065766' } }, res);
   assert.equal(res.statusCode, 200);
   assert.equal(res.payload.data.inGroup, true);
 });
@@ -149,7 +149,7 @@ test('POST /api/admin/group-verify/test 不在群时返回not_in_group与响应�
   mockState.body = JSON.stringify({ inGroup: false });
   const handlers = registerRoutes();
   const res = createRes();
-  await invoke(handlers.post, '/api/admin/group-verify/test', { body: { qq: '10000003' }, currentUser: { username: '283405278' } }, res);
+  await invoke(handlers.post, '/api/admin/group-verify/test', { body: { qq: '10000003' }, currentUser: { username: '3142065766' } }, res);
   assert.equal(res.statusCode, 200);
   assert.equal(res.payload.data.inGroup, false);
   assert.equal(res.payload.data.error, 'not_in_group');
@@ -163,7 +163,7 @@ test('POST /api/admin/group-verify/test 接口HTTP错误返回service_unavailabl
   mockState.body = 'bad gateway';
   const handlers = registerRoutes();
   const res = createRes();
-  await invoke(handlers.post, '/api/admin/group-verify/test', { body: { qq: '10000004' }, currentUser: { username: '283405278' } }, res);
+  await invoke(handlers.post, '/api/admin/group-verify/test', { body: { qq: '10000004' }, currentUser: { username: '3142065766' } }, res);
   assert.equal(res.statusCode, 200);
   assert.equal(res.payload.data.inGroup, false);
   assert.equal(res.payload.data.error, 'service_unavailable');
@@ -177,7 +177,7 @@ test('POST /api/admin/group-verify/test 非JSON响应返回invalid_response', as
   mockState.body = '<html>not json</html>';
   const handlers = registerRoutes();
   const res = createRes();
-  await invoke(handlers.post, '/api/admin/group-verify/test', { body: { qq: '10000005' }, currentUser: { username: '283405278' } }, res);
+  await invoke(handlers.post, '/api/admin/group-verify/test', { body: { qq: '10000005' }, currentUser: { username: '3142065766' } }, res);
   assert.equal(res.statusCode, 200);
   assert.equal(res.payload.data.error, 'invalid_response');
   assert.match(res.payload.data.responseBody, /not json/);
@@ -187,7 +187,7 @@ test('POST /api/admin/group-verify/test 服务不可达返回service_unavailable
   store.setGroupVerifyConfig({ enabled: true, verifyUrl: 'http://127.0.0.1:1/check', timeoutMs: 1500 });
   const handlers = registerRoutes();
   const res = createRes();
-  await invoke(handlers.post, '/api/admin/group-verify/test', { body: { qq: '10000006' }, currentUser: { username: '283405278' } }, res);
+  await invoke(handlers.post, '/api/admin/group-verify/test', { body: { qq: '10000006' }, currentUser: { username: '3142065766' } }, res);
   assert.equal(res.statusCode, 200);
   assert.equal(res.payload.data.inGroup, false);
   assert.equal(res.payload.data.error, 'service_unavailable');
