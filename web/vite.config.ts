@@ -58,6 +58,7 @@ export default defineConfig({
     },
   },
   server: {
+    allowedHosts: ['.monkeycode-ai.online'],
     proxy: {
       '/socket.io': {
         target: 'http://localhost:3007',

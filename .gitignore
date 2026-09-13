@@ -29,3 +29,7 @@ temp/
 
 # 配置合并脚本产生的备份
 *.bak
+
+# Python 字节码缓存
+__pycache__/
+*.pyc

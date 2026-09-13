@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { storeToRefs } from 'pinia'
 import { onMounted, onUnmounted } from 'vue'
+import AnnouncementModal from '@/components/AnnouncementModal.vue'
 import MysteryMerchantBanner from '@/components/shop/MysteryMerchantBanner.vue'
 import Sidebar from '@/components/Sidebar.vue'
 import TopAccountMenu from '@/components/TopAccountMenu.vue'
@@ -65,6 +66,8 @@ onUnmounted(() => {
         </div>
       </div>
     </main>
+
+    <AnnouncementModal />
   </div>
 </template>
 
