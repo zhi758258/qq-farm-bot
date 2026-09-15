@@ -378,6 +378,24 @@ async function runPetDiaryAutomation(flags) {
     await step(flags.adopt, '领取比熊',
         () => pet.nurture?.adult === true && pet.nurture?.dogGranted !== true, 'claimDog');
 
+    // ActivityService 领取奖励后，比熊还只是“可激活”；官方客户端会在宠物界面另调
+    // DogService.ActivateDog。严格复用成年 + 已领奖条件，并由 pets service 再校验
+    // GetDogInfo 的可激活标记，兼容此前已领取但尚未手动激活的账号。
+    if (flags.adopt && pet.nurture?.adult === true && pet.nurture?.dogGranted === true) {
+        try {
+            const result = await require('../services/pets').activateBichonIfEligible(pet);
+            if (result.activated) {
+                log('活动', '萌宠日记激活比熊完成', {
+                    module: 'activity', event: '萌宠日记激活比熊', result: 'success'
+                });
+            }
+        } catch (err) {
+            log('活动', `萌宠日记激活比熊失败: ${err.message}`, {
+                module: 'activity', event: '萌宠日记激活比熊', result: 'error'
+            });
+        }
+    }
+
     // 选锦囊必须排在投喂之后：canChoose 要求已成年（stage 2），
     // 而成年是投喂到 7000 成长值换来的。放在投喂前会导致刚成年的那一轮永远选不到锦囊。
     // 锦囊影响夺宝结算，所以又要排在寻宝之前。
@@ -1667,6 +1685,9 @@ async function handleApiCall(msg) {
                 break;
             case 'getPetOverview':
                 result = await require('../services/pets').getPetOverview();
+                break;
+            case 'activateDog':
+                result = await require('../services/pets').activateDog(args[0]);
                 break;
             case 'deployDog':
                 require('../services/capital-mode').releaseForManualCommand();

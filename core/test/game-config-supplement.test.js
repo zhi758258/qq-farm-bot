@@ -84,10 +84,16 @@ test('charity red flower uses the official single-grid plant configuration', () 
   assert.match(plant?.grow_phases || '', /盛开:0/);
 });
 
-test('charity flower activity items use official names', () => {
+test('charity flower activity items use official names and static icons', () => {
   assert.equal(getItemById(1040)?.name, '爱心值');
   assert.equal(getItemById(2158)?.name, '小红花做好事头像框');
   assert.equal(getItemById(101604)?.name, '公益小红花结算礼包');
+  assert.equal(getItemImageById(101604), '/activity/charity-flower/settlement-pack.png');
+  assert.equal(
+    fs.existsSync(path.join(__dirname, '..', '..', 'web', 'public', 'activity', 'charity-flower', 'settlement-pack.png')),
+    true,
+    'charity flower settlement pack image file',
+  );
   assertImageExists(20883, 'red flower seed image');
   assertImageExists(40883, 'red flower fruit image');
 });

@@ -24,7 +24,7 @@ const tabs: { key: PetTab, label: string, icon: string }[] = [
   { key: 'logs', label: '守护记录', icon: 'i-carbon-security' },
   { key: 'capital', label: '资本模式', icon: 'i-carbon-time' },
 ]
-const sortedDogs = computed(() => [...overview.value.dogs].sort((a, b) => Number(b.deployed) - Number(a.deployed) || Number(b.owned) - Number(a.owned) || b.rarity - a.rarity))
+const sortedDogs = computed(() => [...overview.value.dogs].sort((a, b) => Number(b.deployed) - Number(a.deployed) || Number(b.owned) - Number(a.owned) || Number(b.activatable) - Number(a.activatable) || b.rarity - a.rarity))
 const ownedCount = computed(() => overview.value.dogs.filter(dog => dog.owned).length)
 const deployed = computed(() => overview.value.dogs.find(dog => dog.deployed))
 const foodPercent = computed(() => {
@@ -204,7 +204,7 @@ onMounted(load)
               class="dog-card min-w-0 flex flex-col border rounded-lg p-2.5 transition sm:p-3"
               :class="dog.deployed
                 ? 'border-[var(--theme-primary)] bg-[color-mix(in_srgb,var(--theme-primary)_7%,transparent)] shadow-sm'
-                : dog.owned
+                : dog.owned || dog.activatable
                   ? 'border-gray-200 bg-white hover:border-[var(--theme-primary)] dark:border-gray-700 dark:bg-gray-800'
                   : 'border-gray-200 bg-gray-50 opacity-65 dark:border-gray-700 dark:bg-gray-900/30'"
             >
@@ -220,8 +220,8 @@ onMounted(load)
                     </h3>
                     <span v-if="dog.owned" class="shrink-0 text-[11px] text-gray-400">Lv.{{ dog.level || 1 }}</span>
                   </div>
-              <p class="dog-description line-clamp-2 mt-1 text-[11px] text-gray-500 leading-4 dark:text-gray-400" :title="dog.desc || undefined">
-                    {{ dog.desc || (dog.owned ? '农场守护伙伴' : '尚未获得该宠物') }}
+                  <p class="dog-description line-clamp-2 mt-1 text-[11px] text-gray-500 leading-4 dark:text-gray-400" :title="dog.desc || undefined">
+                    {{ dog.desc || (dog.owned ? '农场守护伙伴' : dog.activatable ? '背包中有宠物卡，可激活' : '尚未获得该宠物') }}
                   </p>
                 </div>
               </div>
@@ -230,14 +230,16 @@ onMounted(load)
                 class="mt-2 h-8 w-full flex items-center justify-center gap-1 rounded-md text-xs font-medium transition disabled:cursor-not-allowed disabled:opacity-55"
                 :class="dog.deployed
                   ? 'bg-[color-mix(in_srgb,var(--theme-primary)_14%,transparent)] text-[var(--theme-primary)]'
-                  : dog.owned
+                  : dog.owned || dog.activatable
                     ? 'bg-gray-100 text-gray-700 hover:bg-[var(--theme-primary)] hover:text-white dark:bg-gray-700 dark:text-gray-200'
                     : 'bg-gray-100 text-gray-400 dark:bg-gray-800'"
-                :disabled="!dog.owned || dog.deployed || mutating"
-                @click="action(() => petStore.deploy(String(currentAccountId), dog.id), `${dog.name}已派出`)"
+                :disabled="(!dog.owned && !dog.activatable) || dog.deployed || mutating"
+                @click="dog.activatable
+                  ? action(() => petStore.activate(String(currentAccountId), dog.id), `${dog.name}已激活`)
+                  : action(() => petStore.deploy(String(currentAccountId), dog.id), `${dog.name}已派出`)"
               >
-                <span :class="dog.deployed ? 'i-carbon-checkmark-filled' : dog.owned ? 'i-carbon-play-filled' : 'i-carbon-locked'" />
-                {{ dog.deployed ? '正在守护' : dog.owned ? '派出守护' : '尚未获得' }}
+                <span :class="dog.deployed ? 'i-carbon-checkmark-filled' : dog.owned ? 'i-carbon-play-filled' : dog.activatable ? 'i-carbon-unlocked' : 'i-carbon-locked'" />
+                {{ dog.deployed ? '正在守护' : dog.owned ? '派出守护' : dog.activatable ? '激活宠物' : '尚未获得' }}
               </button>
             </article>
           </div>

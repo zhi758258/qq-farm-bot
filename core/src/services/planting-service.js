@@ -159,7 +159,8 @@ function getEstimatedLandClearAt(land, emptySet) {
 
   const plant = land?.plant;
   const phases = Array.isArray(plant?.phases) ? plant.phases : [];
-  if (phases.length === 0) return 0;
+  // 不在已确认空地集合内且缺少生长阶段时，不能乐观地当作立即清空。
+  if (phases.length === 0) return Number.MAX_SAFE_INTEGER;
 
   const maturePhase = phases.find(phase => toNum(phase?.phase) === 6);
   const matureAt = toTimeSec(maturePhase?.begin_time);
@@ -174,7 +175,74 @@ function getEstimatedLandClearAt(land, emptySet) {
   return Math.max(getServerTimeSec(), matureAt) + remainingSeasons * growSeconds;
 }
 
-/** 优先选择已完全空闲的组合，并且最多保留一个仍在等待清空的组合。 */
+function get2x2GroupMetrics(group, landMap, emptySet, previousReservations) {
+  const clearTimes = group.landIds.map(id => getEstimatedLandClearAt(landMap.get(id), emptySet));
+  const clearAt = Math.max(...clearTimes);
+  const now = getServerTimeSec();
+  const lockCost = clearAt >= Number.MAX_SAFE_INTEGER
+    ? Number.MAX_SAFE_INTEGER
+    : clearTimes.reduce((sum, time) => {
+        const normalized = time === 0 ? now : time;
+        return Math.min(Number.MAX_SAFE_INTEGER, sum + Math.max(0, clearAt - normalized));
+      }, 0);
+  return {
+    group,
+    level: toNum(landMap.get(group.masterLandId)?.level),
+    clearAt,
+    lockCost,
+    waiting: !group.landIds.every(id => emptySet.has(id)),
+    reserved: previousReservations.has(group.key),
+  };
+}
+
+function compareNumberArrays(left, right, direction = 1) {
+  const length = Math.min(left.length, right.length);
+  for (let index = 0; index < length; index++) {
+    if (left[index] !== right[index]) return direction * (left[index] - right[index]);
+  }
+  return 0;
+}
+
+function compareClearTimeArrays(left, right) {
+  const length = Math.min(left.length, right.length);
+  for (let index = 0; index < length; index++) {
+    const difference = left[index] - right[index];
+    if (Math.abs(difference) > TWO_BY_TWO_CLEAR_TIME_TOLERANCE_SEC) return -difference;
+  }
+  return 0;
+}
+
+/** 返回正数表示 left 方案优于 right。 */
+function compare2x2Plans(left, right) {
+  const leftLevels = left.map(item => item.level).sort((a, b) => b - a);
+  const rightLevels = right.map(item => item.level).sort((a, b) => b - a);
+  const levelResult = compareNumberArrays(leftLevels, rightLevels, 1);
+  if (levelResult !== 0) return levelResult;
+
+  if (left.length !== right.length) return left.length - right.length;
+
+  const leftClearTimes = left.map(item => item.clearAt).sort((a, b) => a - b);
+  const rightClearTimes = right.map(item => item.clearAt).sort((a, b) => a - b);
+  const clearResult = compareClearTimeArrays(leftClearTimes, rightClearTimes);
+  if (clearResult !== 0) return clearResult;
+
+  const leftLockCost = left.reduce((sum, item) => Math.min(Number.MAX_SAFE_INTEGER, sum + item.lockCost), 0);
+  const rightLockCost = right.reduce((sum, item) => Math.min(Number.MAX_SAFE_INTEGER, sum + item.lockCost), 0);
+  if (leftLockCost !== rightLockCost) return rightLockCost - leftLockCost;
+
+  const leftReserved = left.filter(item => item.reserved).length;
+  const rightReserved = right.filter(item => item.reserved).length;
+  if (leftReserved !== rightReserved) return leftReserved - rightReserved;
+
+  const leftIds = left.map(item => item.group.masterLandId).sort((a, b) => a - b);
+  const rightIds = right.map(item => item.group.masterLandId).sort((a, b) => a - b);
+  return compareNumberArrays(leftIds, rightIds, -1);
+}
+
+/**
+ * 全局选择互不重叠的 2x2 区域。左下锚点品级最高优先，同品级再减少等待与锁地浪费；
+ * 已完全空闲的区域可以选择多组，需要等待清空的区域最多预留一组。
+ */
 function select2x2Reservations(groups, emptyLandIds, desiredCount, lands) {
   const emptySet = new Set((emptyLandIds || []).map(toNum).filter(Boolean));
   const landMap = buildLandMap(lands);
@@ -184,40 +252,32 @@ function select2x2Reservations(groups, emptyLandIds, desiredCount, lands) {
       footprint => overlapsLandIds(group.landIds, footprint.landIds)
     );
   });
-  const ready = candidates
-    .filter(group => group.landIds.every(id => emptySet.has(id)));
-  const selected = selectMaximumNonOverlappingGroups(ready, desiredCount);
-  const occupied = new Set(selected.flatMap(group => group.landIds));
-
   const previousReservations = new Set(reserved2x2GroupKeys);
-  const waiting = candidates
-    .filter(group => !group.landIds.every(id => emptySet.has(id)))
-    .sort((a, b) => {
-      // 用户手动催熟/收获形成的区域应优先：三块已空、只等一块的组合，
-      // 必须允许它超过尚未形成同等清空进度的旧预留区域。
-      const emptyA = a.landIds.filter(id => emptySet.has(id)).length;
-      const emptyB = b.landIds.filter(id => emptySet.has(id)).length;
-      if (emptyA !== emptyB) return emptyB - emptyA;
-      // 清空进度相同时保持既有预留，避免仅因预计成熟时间波动而来回漂移。
-      const reservedA = previousReservations.has(a.key) ? 1 : 0;
-      const reservedB = previousReservations.has(b.key) ? 1 : 0;
-      if (reservedA !== reservedB) return reservedB - reservedA;
-      const clearAtA = Math.max(...a.landIds.map(id => getEstimatedLandClearAt(landMap.get(id), emptySet)));
-      const clearAtB = Math.max(...b.landIds.map(id => getEstimatedLandClearAt(landMap.get(id), emptySet)));
-      if (Math.abs(clearAtA - clearAtB) > TWO_BY_TWO_CLEAR_TIME_TOLERANCE_SEC) {
-        return clearAtA - clearAtB;
-      }
-      return a.masterLandId - b.masterLandId;
-    });
+  const metrics = candidates.map(group => get2x2GroupMetrics(
+    group,
+    landMap,
+    emptySet,
+    previousReservations,
+  ));
+  const limit = Math.max(0, Math.min(toNum(desiredCount), metrics.length));
+  let best = [];
 
-  // 已完整空闲的区域可以种植多组；需要等待的区域最多只预留一组。
-  for (const group of waiting) {
-    if (selected.length >= desiredCount) break;
-    if (group.landIds.some(id => occupied.has(id))) continue;
-    selected.push(group);
-    group.landIds.forEach(id => occupied.add(id));
-    break;
+  function search(index, chosen, occupied, waitingCount) {
+    if (compare2x2Plans(chosen, best) > 0) best = [...chosen];
+    if (index >= metrics.length || chosen.length >= limit) return;
+
+    const item = metrics[index];
+    if ((!item.waiting || waitingCount === 0)
+      && !item.group.landIds.some(id => occupied.has(id))) {
+      const nextOccupied = new Set(occupied);
+      item.group.landIds.forEach(id => nextOccupied.add(id));
+      search(index + 1, [...chosen, item], nextOccupied, waitingCount + (item.waiting ? 1 : 0));
+    }
+    search(index + 1, chosen, occupied, waitingCount);
   }
+
+  search(0, [], new Set(), 0);
+  const selected = best.map(item => item.group);
 
   reserved2x2GroupKeys = selected
     .filter(group => !group.landIds.every(id => emptySet.has(id)))

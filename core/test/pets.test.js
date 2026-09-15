@@ -1,7 +1,7 @@
 const assert = require('node:assert/strict');
 const test = require('node:test');
 
-const { buildPetSnapshot } = require('../src/services/pets');
+const { buildPetSnapshot, BICHON_DOG_ID, getDogActivationState } = require('../src/services/pets');
 const { _test: storeTest } = require('../src/models/store');
 const { findNearestMatureSeconds } = require('../src/services/capital-mode');
 
@@ -48,8 +48,48 @@ test('bichon metadata and official image resolve for owned and unowned pets', ()
   const owned = buildPetSnapshot({ current_dog_id: 90031, dogs: [{ id: 90031, owned: 1, level: 3 }] }).dogs;
   assert.equal(owned.filter(dog => dog.id === 90031).length, 1);
   assert.deepEqual({ ...owned.find(dog => dog.id === 90031) }, {
-    ...unowned, owned: true, deployed: true, level: 3
+    ...unowned, owned: true, activatable: false, deployed: true, level: 3
   });
   assert.equal(unowned.image, image);
   assert.match(unowned.desc, /比熊润田/);
+});
+
+test('pet snapshot exposes unlocked cards as manually activatable', () => {
+  const snapshot = buildPetSnapshot({
+    dogs: [{ id: 90011, name: '柯基' }]
+  }, { items: [
+    { id: 90011, count: 1 },
+    { id: 90021, count: 1, locked: true },
+  ] });
+  assert.equal(snapshot.dogs.find(dog => dog.id === 90011).activatable, true);
+  assert.equal(snapshot.dogs.find(dog => dog.id === 90021).activatable, false);
+});
+
+test('bichon activation requires server activatable marker and stops after ownership', () => {
+  const pending = getDogActivationState({
+    dogs: [{ id: BICHON_DOG_ID, field_6: 1 }]
+  }, BICHON_DOG_ID);
+  assert.equal(pending.owned, false);
+  assert.equal(pending.activatable, true);
+
+  const tooEarly = getDogActivationState({
+    dogs: [{ id: BICHON_DOG_ID }]
+  }, BICHON_DOG_ID);
+  assert.equal(tooEarly.activatable, false);
+
+  const owned = getDogActivationState({
+    dogs: [{ id: BICHON_DOG_ID, field_6: 1, owned: 1 }]
+  }, BICHON_DOG_ID);
+  assert.equal(owned.owned, true);
+  assert.equal(owned.activatable, false);
+});
+
+test('ActivateDog request for bichon matches decrypted HAR bytes', () => {
+  const protobuf = require('protobufjs');
+  const path = require('node:path');
+  const root = new protobuf.Root();
+  root.loadSync(path.join(__dirname, '../src/proto/dogpb.proto'), { keepCase: true });
+  const request = root.lookupType('gamepb.dogpb.ActivateDogRequest');
+  const bytes = request.encode(request.create({ dog_id: BICHON_DOG_ID })).finish();
+  assert.equal(Buffer.from(bytes).toString('hex'), '08afbf05');
 });

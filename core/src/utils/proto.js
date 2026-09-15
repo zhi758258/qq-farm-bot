@@ -258,6 +258,10 @@ async function loadProto() {
     types.GoodsUnlockNotify = root.lookupType('gamepb.shoppb.GoodsUnlockNotify');
     types.TaskInfoNotify = root.lookupType('gamepb.taskpb.TaskInfoNotify');
 
+    // 宠物
+    types.ActivateDogRequest = root.lookupType('gamepb.dogpb.ActivateDogRequest');
+    types.ActivateDogReply = root.lookupType('gamepb.dogpb.ActivateDogReply');
+
     // Proto 加载完成
     log('系统', 'Protobuf 定义加载完成');
     if (protoReadyResolve) protoReadyResolve(true);

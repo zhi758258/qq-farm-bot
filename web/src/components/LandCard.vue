@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import OfficialCrystalMutation from './OfficialCrystalMutation.vue'
+import OfficialBichonMutation from './OfficialBichonMutation.vue'
 import { computed, nextTick, onMounted, onUnmounted, ref, watch } from 'vue'
 
 const props = withDefaults(defineProps<{
@@ -175,6 +176,8 @@ const hasDarkMutation = computed(() => hasMutation(3, 'dark'))
 const hasMoistMutation = computed(() => hasMutation(4, 'moist'))
 const hasLightningMutation = computed(() => hasMutation(12, 'lightning'))
 const hasCrystalMutation = computed(() => hasMutation(14, 'crystal'))
+const hasBichonMutation = computed(() => hasMutation(15, 'bichon'))
+const hasParadiseMutation = computed(() => hasMutation(16, 'leyuan'))
 const darkSmokeImageUrl = '/game-config/effect_images/mutant/dark-smoke.png'
 const darkParticleImageUrl = '/game-config/effect_images/mutant/dark-particle.png'
 
@@ -404,7 +407,8 @@ function getIsometricBubbleClass(targetLand: any) {
           'land-card-image-dark': hasDarkMutation && Boolean(cropImageUrl),
           'land-card-image-moist': hasMoistMutation && Boolean(cropImageUrl),
           'land-card-image-lightning': hasLightningMutation && Boolean(cropImageUrl),
-          'land-card-image-pet-mutation': hasCrystalMutation && Boolean(cropImageUrl),
+          'land-card-image-pet-mutation': (hasCrystalMutation || hasBichonMutation) && Boolean(cropImageUrl),
+          'land-card-image-paradise': hasParadiseMutation && Boolean(cropImageUrl),
         },
       ]"
     >
@@ -436,6 +440,9 @@ function getIsometricBubbleClass(targetLand: any) {
       </div>
       <OfficialCrystalMutation
         v-if="hasCrystalMutation && cropImageUrl && !['dead', 'empty', 'locked'].includes(land.status)"
+      />
+      <OfficialBichonMutation
+        v-if="hasBichonMutation && cropImageUrl && !['dead', 'empty', 'locked'].includes(land.status)"
       />
       <img
         v-if="cropImageUrl"

@@ -77,6 +77,7 @@ const modules = [
   { label: '商城', value: 'shop' },
   { label: '任务', value: 'task' },
   { label: '活动', value: 'activity' },
+  { label: '宠物', value: 'pet' },
   { label: '系统', value: 'system' },
 ]
 
@@ -106,6 +107,12 @@ const events = [
   { label: '土地解锁', value: '解锁土地' },
   { label: '好友巡查', value: '好友巡查循环' },
   { label: '访问好友', value: '进入农场' },
+  { label: '激活宠物', value: '激活宠物' },
+  { label: '派出宠物', value: '派出宠物' },
+  { label: '召回宠物', value: '召回宠物' },
+  { label: '喂食宠物', value: '喂食宠物' },
+  { label: '资本模式派出', value: '资本模式派出' },
+  { label: '资本模式召回', value: '资本模式召回' },
 ]
 
 const eventLabelMap: Record<string, string> = Object.fromEntries(
@@ -335,6 +342,8 @@ function getLogTagClass(tag: string) {
     return 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300'
   if (tag === '活动')
     return 'bg-violet-100 text-violet-700 dark:bg-violet-900/30 dark:text-violet-300'
+  if (tag === '宠物')
+    return 'bg-cyan-100 text-cyan-700 dark:bg-cyan-900/30 dark:text-cyan-300'
   if (tag === '警告')
     return 'bg-orange-100 text-orange-700 dark:bg-orange-900/30 dark:text-orange-300'
   return 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-300'

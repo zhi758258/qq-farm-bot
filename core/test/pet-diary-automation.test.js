@@ -102,6 +102,16 @@ test('选锦囊必须排在投喂之后', () => {
     assert.ok(charmIndex > feedIndex, '选锦囊必须排在投喂之后');
 });
 
+test('比熊只在成年且活动奖励已领取后进入宠物激活', () => {
+    const source = workerSource();
+    const claimIndex = source.indexOf("'领取比熊'");
+    const activateIndex = source.indexOf('activateBichonIfEligible');
+    assert.ok(claimIndex > 0 && activateIndex > claimIndex, '宠物激活必须排在活动领取之后');
+    const activationBlock = source.slice(activateIndex - 500, activateIndex + 100);
+    assert.ok(activationBlock.includes('pet.nurture?.adult === true'), '激活必须要求比熊成年');
+    assert.ok(activationBlock.includes('pet.nurture?.dogGranted === true'), '激活必须要求活动奖励已领取');
+});
+
 test('宝藏判定用服务器时钟而非快照时间戳', () => {
     // pet.serverTime 是快照抓取时刻，一轮跑下来可能已过去几分钟，
     // 只会偏小，导致中途成熟的宝藏被漏掉、精准唤醒算得偏晚。

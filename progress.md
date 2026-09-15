@@ -8,14 +8,15 @@
 
 # 当前状态
 
-- TSDK/ACE 安全链路已升级到 QQ Mac 客户端 2026-08-20 10:32 包内的官方
-  `v3.9.0.1787057219` WASM（161114 字节，SHA-256
-  `98cc5301cff10f5b87a014d0a4af92630e4a6e91292cc7de5eb86422275f0070`）。
-  同包 `game.js` 和 WASM 静态检查确认 22 个 imports、导出映射、
-  `SdkInitEx(3167, 0)`、17 个 mergewasm 数据段及解密密钥均与现有 Node 宿主兼容；
-  默认运行文件已切换为 `tsdk-v3.9.0.wasm`，保留 `tsdk-v3.8.6.wasm` 用于回退。
-  语法检查、定向 ESLint 和 6/6 TSDK/网关测试通过；完整后端套件中 TSDK 项通过，
-  总计 152/153 通过，既有 `capture-core` 代理启动用例在当前环境失败，未改动该模块。
+- TSDK/ACE 安全链路已升级到 2026-09-14 上游已验证的官方
+  `v3.9.0.1789137379` WASM（161084 字节，SHA-256
+  `1744e339d43425f9f24834fd49b3239f824f57fe76242d5b3128ac55b3110ac5`）。
+  静态检查确认 22 个 imports、61 个 exports、17 个 mergewasm 数据段及解密密钥
+  均与现有 Node 宿主兼容；默认运行文件已切换为
+  `tsdk-v3.9.0.1789137379.wasm`，保留 `tsdk-v3.9.0.1788935757.wasm` 用于回退。
+  登录与心跳请求已按 `1.14.0.4_20260911` 官方抓包逐字节锁定；自定义设备
+  协议仍保留扩展设备字段。本机最新 QQ 展开包仍为 2026-09-10 版，受控在线验收待完成。
+  语法检查、定向 ESLint 和 TSDK/网关协议测试通过；完整后端测试 360/360 通过。
   调用映射和内存所有权见 `core/docs/tsdk-ace-runtime.md`；受控在线 5/30 分钟好友
   操作仍需测试账号实测。
 - WASM 后续更新已标准化：新增 `core/scripts/inspect-tsdk-update.js` 和
@@ -23,6 +24,9 @@
   segments、解密高频常量、`game.js` 版本/关键标记及基线兼容性；完整发现、快照、
   差异分级、更新、离线/在线验收和回退流程见
   `core/docs/tsdk-update-runbook.md`。
+- 宠物页已支持通用手工激活：后端复用 `DogService.ActivateDog` 及同一串行化校验，
+  以服务端 `field_6` 或背包中未锁定的同 ID 宠物卡判断可激活；worker/provider/API/
+  Pinia/页面入口已贯通，激活后会刷新宠物快照。
 - 技术栈：后端 `core` 是 Node.js/CommonJS + Express + Socket.IO；前端 `web` 是 Vue 3 + Vite + TypeScript + Pinia + UnoCSS。
 - 最新快速体检结果：`web/src` 全量 ESLint 通过，`web` 生产构建通过；`core/src/**/*.js` 全量 `node --check` 通过。源码扫描未发现真实替换字符类乱码、孤立 `undefined` 行或 `_v###` 反编译变量残留；`core` ESLint 因本地 `core/node_modules` 缺少 `@antfu/eslint-config` 未作为源码失败处理。
 - UTF-8 源码扫描未发现 `core/src`、`web/src` 存在真实替换字符类乱码；PowerShell 仍可能把中文显示成乱码，不能据此改源码。
