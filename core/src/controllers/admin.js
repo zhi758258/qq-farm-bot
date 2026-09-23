@@ -34,6 +34,12 @@ const {
 } = require("./admin-account-runtime-routes");
 const { registerAdminAccountRoutes } = require("./admin-account-routes");
 const { registerAdminAnalyticsRoutes } = require("./admin-analytics-routes");
+const {
+  registerAdminAnnouncementRoutes,
+} = require("./admin-announcement-routes");
+const {
+  registerAdminUserManageRoutes,
+} = require("./admin-user-manage-routes");
 const { createAdminAccountAccess } = require("./admin-account-access");
 const { registerAdminAuthRoutes } = require("./admin-auth-routes");
 const { registerAdminBagRoutes } = require("./admin-bag-routes");
@@ -72,12 +78,15 @@ const DEFAULT_ALLOWED_ORIGINS = [
 ];
 const PUBLIC_API_PATHS = new Set([
   "/login",
-  "/auto-login",
+  "/register",
+  "/card-claim/status",
+  "/card-claim/claim",
   "/qr/create",
   "/qr/check",
   "/game-version",
   "/public/login-links",
   "/changelog",
+  "/announcement",
   "/health",
 ]);
 const FIVE_MINUTES_MS = 5 * 60 * 1000;
@@ -158,6 +167,7 @@ function registerAuthGate(expressApp, requireAdminToken) {
     if (
       PUBLIC_API_PATHS.has(req.path)
       || req.path.startsWith("/public/capture-certificate/")
+      || req.path.startsWith("/card/info/")
     ) return next();
     return requireAdminToken(req, res, next);
   });
@@ -343,11 +353,17 @@ function startAdminServer(dataProvider) {
   provider = dataProvider;
   app = express();
   app.set("trust proxy", true);
+  // 用户备份导入需携带完整用户与卡密数据，单独放宽该路径的请求体上限
+  app.use(
+    "/api/admin/users/backup/import",
+    express.json({ limit: "6mb" }),
+  );
   app.use(express.json({ limit: "256kb" }));
 
   const adminSessionManager = createAdminSessionManager({
     logger: adminLogger,
     getIo: () => io,
+    userStore,
   });
   const {
     cleanupInvalidAdminSessions,
@@ -384,6 +400,7 @@ function startAdminServer(dataProvider) {
     requireDangerConfirmation,
     requireSuperAdminRole,
     sendProviderError,
+    getAdminUserMutationError,
   } = adminRouteHelpers;
 
   const webDist = path.join(__dirname, "../../../web/dist");
@@ -416,9 +433,21 @@ function startAdminServer(dataProvider) {
     app,
     logger: adminLogger,
     userStore,
+    store,
     requireAdminToken,
     createAdminSession,
     updateAdminSessions,
+    requireAdminRole,
+  });
+  registerAdminUserManageRoutes({
+    app,
+    logger: adminLogger,
+    userStore,
+    requireAdminToken,
+    requireAdminRole,
+    requireSuperAdminRole,
+    requireDangerConfirmation,
+    getAdminUserMutationError,
   });
   registerHealthRoute(app);
   registerAuthGate(app, requireAdminToken);
@@ -540,6 +569,13 @@ function startAdminServer(dataProvider) {
     getDefaultSystemConfig,
     getRuntimeConfig,
     updateRuntimeConfig,
+  });
+  registerAdminAnnouncementRoutes({
+    app,
+    store,
+    logger: adminLogger,
+    requireAdminToken,
+    requireAdminRole,
   });
   adminLogger.info("抓包服务默认关闭，未随管理面板启动运行");
   registerAdminCaptureRoutes({

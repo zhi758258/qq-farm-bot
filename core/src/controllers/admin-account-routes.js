@@ -230,7 +230,7 @@ function registerAdminAccountRoutes({
       if (!isUpdate && currentUser && !isAdmin) {
         const accountCount = getAccountsForUser(currentUser.username).length;
         const accountLimit =
-          currentUser.accountLimit || userStore.DEFAULT_ACCOUNT_LIMIT || 2;
+          currentUser.accountLimit || userStore.DEFAULT_ACCOUNT_LIMIT || 99;
         if (accountCount >= accountLimit) {
           return res.status(403).json({
             ok: false,

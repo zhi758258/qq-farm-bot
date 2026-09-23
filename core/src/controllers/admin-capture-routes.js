@@ -748,7 +748,7 @@ function registerAdminCaptureRoutes({
       }
       if (!isUpdate && !isAdminUser(currentUser)) {
         const accountCount = store.getAccountsByUser(currentUser.username).accounts.length;
-        const accountLimit = currentUser.accountLimit || userStore.DEFAULT_ACCOUNT_LIMIT || 2;
+        const accountLimit = currentUser.accountLimit || userStore.DEFAULT_ACCOUNT_LIMIT || 99;
         if (accountCount >= accountLimit) {
           return res.status(403).json({
             ok: false,
