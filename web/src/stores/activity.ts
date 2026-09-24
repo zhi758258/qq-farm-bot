@@ -361,6 +361,10 @@ export const useActivityStore = defineStore('activity', () => {
   const rainPoemLoading = ref(false)
   const charityFlowerActivity = ref<CharityFlowerActivityData | null>(null)
   const charityFlowerLoading = ref(false)
+  const wishSignActivity = ref<any | null>(null)
+  const wishSignLoading = ref(false)
+  const shareRewardActivity = ref<any | null>(null)
+  const shareRewardLoading = ref(false)
   const petDiaryActivity = ref<PetDiaryActivityData | null>(null)
   const petDiaryLoading = ref(false)
   const petDiaryError = ref('')
@@ -388,6 +392,8 @@ export const useActivityStore = defineStore('activity', () => {
     qixiActivity.value = null
     rainPoemActivity.value = null
     charityFlowerActivity.value = null
+    wishSignActivity.value = null
+    shareRewardActivity.value = null
     petDiaryActivity.value = null
     petDiaryError.value = ''
     qixiFriends.value = []
@@ -436,6 +442,26 @@ export const useActivityStore = defineStore('activity', () => {
       return data
     }
     finally { charityFlowerLoading.value = false }
+  }
+
+  async function fetchWishSignActivity(accountId: string) {
+    wishSignLoading.value = true
+    try {
+      const { data } = await api.get('/api/activity/wish-sign', { headers: { 'x-account-id': accountId } })
+      if (data.ok && isCurrentAccount(String(accountId))) wishSignActivity.value = data.activity || null
+      return data
+    }
+    finally { wishSignLoading.value = false }
+  }
+
+  async function fetchShareRewardActivity(accountId: string) {
+    shareRewardLoading.value = true
+    try {
+      const { data } = await api.get('/api/activity/share-reward', { headers: { 'x-account-id': accountId } })
+      if (data.ok && isCurrentAccount(String(accountId))) shareRewardActivity.value = data.activity || null
+      return data
+    }
+    finally { shareRewardLoading.value = false }
   }
 
   async function fetchPetDiaryActivity(accountId: string) {
@@ -675,6 +701,10 @@ export const useActivityStore = defineStore('activity', () => {
     rainPoemLoading,
     charityFlowerActivity,
     charityFlowerLoading,
+    wishSignActivity,
+    wishSignLoading,
+    shareRewardActivity,
+    shareRewardLoading,
     petDiaryActivity,
     petDiaryLoading,
     petDiaryError,
@@ -697,6 +727,8 @@ export const useActivityStore = defineStore('activity', () => {
     fetchQixiActivity,
     fetchRainPoemActivity,
     fetchCharityFlowerActivity,
+    fetchWishSignActivity,
+    fetchShareRewardActivity,
     fetchPetDiaryActivity,
     buildQixiBridge,
     useQixiDew,
