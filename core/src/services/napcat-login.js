@@ -4,9 +4,13 @@ const QRCode = require('qrcode');
 
 const APP_ID = '1112386029';
 const TTL_MS = Math.max(30000, Number(process.env.NAPCAT_LOGIN_TTL_MS) || 120000);
+const RESTART_READY_TIMEOUT_MS = Math.max(3000, Number(process.env.NAPCAT_RESTART_READY_TIMEOUT_MS) || 30000);
+const BLOCKING_TASK_STATUS = new Set(['waiting_scan', 'scanned', 'confirmed', 'cleaning']);
 const tasks = new Map();
 let activeTaskId = '';
 let webUiCredential = '';
+let restarting = false;
+let lastRestartAt = 0;
 
 function trimUrl(value) { return String(value || '').trim().replace(/\/+$/, ''); }
 function authToken() {
@@ -115,6 +119,69 @@ async function resetNapcat() {
     } catch {}
   }
   throw new Error('NapCat 重启后仍未确认退出登录');
+}
+
+function getServiceStatus() {
+  return {
+    enabled: isConfigured(),
+    restarting,
+    lastRestartAt,
+  };
+}
+
+function hasBlockingLoginTask() {
+  const current = tasks.get(activeTaskId);
+  return Boolean(current && current.expiresAt > Date.now() && BLOCKING_TASK_STATUS.has(current.status));
+}
+
+async function clearNapcatLogs() {
+  const cfg = config();
+  const payload = await requestJson(`${cfg.plugin}/clear-logs`, { token: cfg.pluginToken, timeout: 10000 });
+  if (payload.ok !== true) throw new Error(payload.error || 'NapCat 日志清理失败');
+  return payload;
+}
+
+async function waitUntilReady(timeoutMs = RESTART_READY_TIMEOUT_MS) {
+  const startedAt = Date.now();
+  webUiCredential = '';
+  await new Promise(resolve => setTimeout(resolve, 500));
+  let delay = 400;
+  while (Date.now() - startedAt < timeoutMs) {
+    const cfg = config();
+    try {
+      const health = await requestJson(`${cfg.plugin}/status`, { method: 'GET', token: cfg.pluginToken, timeout: 4000 });
+      if (health.ok === true) return true;
+    } catch {}
+    try {
+      await webUi('/QQLogin/CheckLoginStatus');
+      return true;
+    } catch {}
+    await new Promise(resolve => setTimeout(resolve, delay));
+    delay = Math.min(1500, delay + 200);
+  }
+  throw new Error('NapCat 重启后未能恢复');
+}
+
+async function restartService() {
+  if (!isConfigured()) throw new Error('NapCat 扫码登录未配置');
+  if (restarting) throw new Error('NapCat 正在重启，请稍候');
+  if (hasBlockingLoginTask()) throw new Error('当前有 QQ 扫码任务进行中，请先完成或取消后再重启');
+  restarting = true;
+  let logsCleared = false;
+  try {
+    try {
+      await clearNapcatLogs();
+      logsCleared = true;
+    } catch {}
+    webUiCredential = '';
+    await webUi('/QQLogin/RestartNapCat');
+    webUiCredential = '';
+    await waitUntilReady();
+    lastRestartAt = Date.now();
+    return { restarted: true, logsCleared, lastRestartAt };
+  } finally {
+    restarting = false;
+  }
 }
 
 async function clearStaleSession() {
@@ -243,4 +310,4 @@ async function cancel(id, owner) {
   await release(task, task.status === 'confirmed' ? 'logout' : task.status === 'scanned' ? 'restart' : '');
 }
 
-module.exports = { APP_ID, isConfigured, create, status, code, cancel };
+module.exports = { APP_ID, isConfigured, getServiceStatus, create, status, code, cancel, restartService };

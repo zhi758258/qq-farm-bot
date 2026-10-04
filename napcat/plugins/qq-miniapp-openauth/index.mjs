@@ -68,6 +68,53 @@ function authorized(req, res, token) {
   res.status(401).json({ ok: false, error: 'Unauthorized' });
   return false;
 }
+function isPlainDir(value) {
+  const dir = String(value || '').trim();
+  return dir.startsWith('/') && !dir.includes('\0') && dir !== '/';
+}
+function collectLogFiles(dir, files, depth = 0) {
+  if (depth > 4 || files.length >= 200) return;
+  let entries = [];
+  try { entries = fs.readdirSync(dir, { withFileTypes: true }); } catch { return; }
+  for (const entry of entries) {
+    if (files.length >= 200) return;
+    const fullPath = path.join(dir, entry.name);
+    if (entry.isDirectory()) {
+      collectLogFiles(fullPath, files, depth + 1);
+      continue;
+    }
+    if (!entry.isFile()) continue;
+    if (/\.(?:log|txt|out|err)(?:\.\d+)?$/i.test(entry.name) || /^napcat/i.test(entry.name)) files.push(fullPath);
+  }
+}
+function clearLogFiles() {
+  const seen = new Set();
+  const files = [];
+  const roots = [
+    process.env.NAPCAT_LOG_DIR,
+    '/app/napcat/logs',
+    '/app/logs',
+    path.join(os.tmpdir(), 'napcat'),
+  ].filter((dir, index, list) => isPlainDir(dir) && list.indexOf(dir) === index);
+  for (const root of roots) {
+    if (seen.has(root)) continue;
+    seen.add(root);
+    collectLogFiles(root, files);
+  }
+  let cleared = 0;
+  for (const filePath of files) {
+    try {
+      fs.truncateSync(filePath, 0);
+      cleared += 1;
+    } catch {
+      try {
+        fs.writeFileSync(filePath, '');
+        cleared += 1;
+      } catch {}
+    }
+  }
+  return { cleared, searched: roots };
+}
 
 export async function plugin_init(ctx) {
   const token = String(config(ctx).token || '');
@@ -93,6 +140,15 @@ export async function plugin_init(ctx) {
       } catch (error) { attempts.push({ operation, error: error?.message || String(error) }); }
     }
     res.status(502).json({ ok: false, error: 'QQNT OpenAuth methods returned no authorization code', attempts });
+  });
+  ctx.router.postNoAuth('/clear-logs', async (req, res) => {
+    if (!authorized(req, res, token)) return;
+    try {
+      const result = clearLogFiles();
+      res.json({ ok: true, ...result });
+    } catch (error) {
+      res.status(500).json({ ok: false, error: error?.message || String(error) });
+    }
   });
   ctx.router.postNoAuth('/logout', async (req, res) => {
     if (!authorized(req, res, token)) return;

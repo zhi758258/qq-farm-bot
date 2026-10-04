@@ -36,6 +36,12 @@ export interface GroupVerifyConfig {
   timeoutMs: number
 }
 
+export interface NapcatRestartStatus {
+  enabled: boolean
+  restarting: boolean
+  lastRestartAt: number
+}
+
 export interface GroupVerifyTestResult {
   qq: string
   qqGroupNumber?: string
@@ -102,6 +108,9 @@ export function useAdminSystemConfig(options: UseAdminSystemConfigOptions) {
   const groupVerifyTesting = ref(false)
   const groupVerifyTestQq = ref('')
   const groupVerifyTestResult = ref<GroupVerifyTestResult | null>(null)
+  const napcatStatus = ref<NapcatRestartStatus>({ enabled: false, restarting: false, lastRestartAt: 0 })
+  const napcatRestarting = ref(false)
+  const showRestartNapcatConfirm = ref(false)
 
   const showResetSystemConfirm = ref(false)
   const showSaveSystemConfirm = ref(false)
@@ -402,6 +411,63 @@ export function useAdminSystemConfig(options: UseAdminSystemConfigOptions) {
     showSaveSystemConfirm.value = true
   }
 
+  async function loadNapcatStatus() {
+    try {
+      const { data } = await api.get('/api/napcat-login/capability')
+      if (data?.ok && data.data) {
+        napcatStatus.value = {
+          enabled: data.data.enabled === true,
+          restarting: data.data.restarting === true,
+          lastRestartAt: Number(data.data.lastRestartAt) || 0,
+        }
+      }
+    }
+    catch (e: any) {
+      console.error('加载 NapCat 状态失败:', e)
+    }
+  }
+
+  function openRestartNapcatConfirm() {
+    if (!napcatStatus.value.enabled || napcatRestarting.value)
+      return
+    showRestartNapcatConfirm.value = true
+  }
+
+  function closeRestartNapcatConfirm() {
+    if (napcatRestarting.value)
+      return
+    showRestartNapcatConfirm.value = false
+  }
+
+  async function handleRestartNapcat() {
+    if (napcatRestarting.value)
+      return
+    napcatRestarting.value = true
+    try {
+      const { data } = await api.post('/api/admin/napcat/restart', undefined, { timeout: 45000 })
+      if (data?.ok && data.data) {
+        napcatStatus.value = {
+          enabled: true,
+          restarting: false,
+          lastRestartAt: Number(data.data.lastRestartAt) || Date.now(),
+        }
+        showRestartNapcatConfirm.value = false
+        options.showAlert(data.data.logsCleared ? 'NapCat 已重启并清理日志' : 'NapCat 已重启', 'primary')
+      }
+      else {
+        options.showAlert(data?.error || 'NapCat 重启失败', 'danger')
+      }
+    }
+    catch (e: any) {
+      options.showAlert(e?.response?.data?.error || `NapCat 重启失败: ${e.message || '未知错误'}`, 'danger')
+    }
+    finally {
+      napcatRestarting.value = false
+      showRestartNapcatConfirm.value = false
+      await loadNapcatStatus()
+    }
+  }
+
   return {
     systemConfigSaving,
     systemConfigLoading,
@@ -435,6 +501,13 @@ export function useAdminSystemConfig(options: UseAdminSystemConfigOptions) {
     groupVerifyTestQq,
     groupVerifyTestResult,
     handleTestGroupVerify,
+    napcatStatus,
+    napcatRestarting,
+    showRestartNapcatConfirm,
+    loadNapcatStatus,
+    openRestartNapcatConfirm,
+    closeRestartNapcatConfirm,
+    handleRestartNapcat,
     loadSystemConfig,
     handleSaveSystemConfig,
     handleResetSystemConfig,

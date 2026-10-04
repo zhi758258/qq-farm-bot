@@ -4,6 +4,7 @@ import { useRoute } from 'vue-router'
 import api from '@/api'
 import AdminGroupVerifyCard from '@/components/admin/AdminGroupVerifyCard.vue'
 import AdminLoginLinksCard from '@/components/admin/AdminLoginLinksCard.vue'
+import AdminNapcatRestartCard from '@/components/admin/AdminNapcatRestartCard.vue'
 import AdminSystemPanel from '@/components/admin/AdminSystemPanel.vue'
 import ConfirmModal from '@/components/ConfirmModal.vue'
 import AccountFeatureSettings from '@/components/settings/AccountFeatureSettings.vue'
@@ -177,6 +178,13 @@ const {
   handleUploadLoginLogo,
   openResetLoginLinksConfirm,
   showResetLoginLinksConfirm,
+  napcatStatus,
+  napcatRestarting,
+  showRestartNapcatConfirm,
+  loadNapcatStatus,
+  openRestartNapcatConfirm,
+  closeRestartNapcatConfirm,
+  handleRestartNapcat,
 } = useAdminSystemConfig({ showAlert })
 
 async function saveLoginLinksAndRefresh() {
@@ -447,7 +455,7 @@ watch(currentAccountId, async () => {
 })
 
 onMounted(async () => {
-  await Promise.all([loadSystemConfig(), loadCaptureConfig(), loadGroupVerify(), loadLoginLinks()])
+  await Promise.all([loadSystemConfig(), loadCaptureConfig(), loadGroupVerify(), loadLoginLinks(), loadNapcatStatus()])
   await fetchAccounts()
   await fetchDeviceProtocol()
   selectFirstAccountIfNeeded()
@@ -668,6 +676,14 @@ onMounted(async () => {
             @refresh="runAutoCodeRefreshNow"
           />
 
+          <AdminNapcatRestartCard
+            v-if="userIsAdmin"
+            :enabled="napcatStatus.enabled"
+            :restarting="napcatRestarting || napcatStatus.restarting"
+            :last-restart-at="napcatStatus.lastRestartAt"
+            @restart="openRestartNapcatConfirm"
+          />
+
           <AdminGroupVerifyCard
             v-model:config="localGroupVerify"
             v-model:test-qq="groupVerifyTestQq"
@@ -729,6 +745,18 @@ onMounted(async () => {
       @confirm="resetLoginLinksAndRefresh"
       @close="closeResetLoginLinksConfirm"
       @cancel="closeResetLoginLinksConfirm"
+    />
+
+    <ConfirmModal
+      :show="showRestartNapcatConfirm"
+      title="重启 NapCat"
+      message="确定重启 NapCat 并清理其日志吗？农场 Bot 会继续运行，已登录账号不会掉线。"
+      type="danger"
+      confirm-text="确认重启"
+      :loading="napcatRestarting"
+      @confirm="handleRestartNapcat"
+      @close="closeRestartNapcatConfirm"
+      @cancel="closeRestartNapcatConfirm"
     />
   </div>
 </template>

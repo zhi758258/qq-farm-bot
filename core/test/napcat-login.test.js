@@ -105,3 +105,64 @@ test('NapCat clears a persisted offline session before requesting a new QR code'
   assert.ok(calls.indexOf('/api/QQLogin/RestartNapCat') < calls.indexOf('/api/QQLogin/GetQQLoginQrcode'));
   await service.cancel(task.taskId, 'alice');
 });
+
+test('manual NapCat restart clears logs, waits for ready, and does not restart the farm bot', async (t) => {
+  Object.assign(process.env, {
+    NAPCAT_LOGIN_ENABLED: 'true',
+    NAPCAT_TOKEN: 'napcat-test-token',
+    NAPCAT_WEBUI_URL: 'http://napcat-restart.test/api',
+    NAPCAT_OPENAUTH_URL: 'http://napcat-restart.test/plugin',
+    NAPCAT_RESTART_READY_TIMEOUT_MS: '3000',
+  });
+  const originalFetch = globalThis.fetch;
+  const calls = [];
+  globalThis.fetch = async (url) => {
+    const pathname = new URL(String(url)).pathname;
+    calls.push(pathname);
+    if (pathname.endsWith('/auth/login')) return json({ code: 0, data: { Credential: 'credential' } });
+    if (pathname.endsWith('/clear-logs')) return json({ ok: true, cleared: 2 });
+    if (pathname.endsWith('/QQLogin/RestartNapCat')) return json({ code: 0 });
+    if (pathname.endsWith('/status')) return json({ ok: true, ready: true });
+    return json({ code: 0 });
+  };
+  t.after(() => { globalThis.fetch = originalFetch; });
+
+  delete require.cache[require.resolve('../src/services/napcat-login')];
+  const service = require('../src/services/napcat-login');
+  const result = await service.restartService();
+  assert.equal(result.restarted, true);
+  assert.equal(result.logsCleared, true);
+  assert.ok(result.lastRestartAt > 0);
+  assert.ok(calls.some(pathname => pathname.endsWith('/clear-logs')));
+  assert.ok(calls.some(pathname => pathname.endsWith('/QQLogin/RestartNapCat')));
+  assert.equal(calls.some(pathname => pathname.includes('qq-farm-bot')), false);
+  assert.deepEqual(service.getServiceStatus(), {
+    enabled: true,
+    restarting: false,
+    lastRestartAt: result.lastRestartAt,
+  });
+});
+
+test('manual NapCat restart refuses an in-progress QR login task', async (t) => {
+  Object.assign(process.env, {
+    NAPCAT_LOGIN_ENABLED: 'true',
+    NAPCAT_TOKEN: 'napcat-test-token',
+    NAPCAT_WEBUI_URL: 'http://napcat-busy.test/api',
+    NAPCAT_OPENAUTH_URL: 'http://napcat-busy.test/plugin',
+  });
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = async (url) => {
+    const pathname = new URL(String(url)).pathname;
+    if (pathname.endsWith('/auth/login')) return json({ code: 0, data: { Credential: 'credential' } });
+    if (pathname.endsWith('/QQLogin/CheckLoginStatus')) return json({ code: 0, data: { isLogin: false, isOffline: false } });
+    if (pathname.endsWith('/QQLogin/GetQQLoginQrcode')) return json({ code: 0, data: { qrcode: 'https://example.test/busy-qr' } });
+    return json({ code: 0 });
+  };
+  t.after(() => { globalThis.fetch = originalFetch; });
+
+  delete require.cache[require.resolve('../src/services/napcat-login')];
+  const service = require('../src/services/napcat-login');
+  const task = await service.create('alice');
+  await assert.rejects(() => service.restartService(), /扫码任务进行中/);
+  await service.cancel(task.taskId, 'alice');
+});

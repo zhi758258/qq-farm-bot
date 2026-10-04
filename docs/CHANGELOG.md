@@ -22,12 +22,18 @@ flowchart TB
     L --> M[2026-09-08<br/>NapCat QQ 扫码登录]
     M --> N[2026-09-10 · v2.7.0<br/>萌宠成长日记与变异效果补全]
     N --> O[2026-09-24 · v2.7.1<br/>秋祈良愿与快乐不独享活动]
+    O --> P[2026-10-04<br/>NapCat 手动重启]
 
     classDef seed fill:#e8f8ee,stroke:#20b967,color:#183d2a,stroke-width:2px;
-    class A,B,C,D,E,F,G,H,I,J,K,L,M,N,O seed;
+    class A,B,C,D,E,F,G,H,I,J,K,L,M,N,O,P seed;
 ```
 
 ## 详细记录
+
+### 2026-10-04 · NapCat 手动重启
+
+- “设置 → 系统配置”新增管理员可见的 NapCat 重启开关；点击后弹出确认框，确认后仅重启 NapCat 并清理其日志，农场 Bot 保持运行，已登录账号不会掉线。
+- 重启接口受管理员权限保护，扫码任务进行中会拒绝重启；日志清理失败时仍会继续重启 NapCat。
 
 ### 2026-09-24 · v2.7.1 · 秋祈良愿与快乐不独享活动
 
