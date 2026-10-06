@@ -92,10 +92,6 @@ function buildSettingsPayload(store, accountId, currentUser) {
         : true,
     friendQuietHours: accountId ? store.getFriendQuietHours(accountId) : null,
     automation: accountId ? store.getAutomation(accountId) : {},
-    autoCodeRefresh:
-      accountId && typeof store.getAutoCodeRefresh === "function"
-        ? store.getAutoCodeRefresh(accountId)
-        : { enabled: false, intervalMinutes: 60 },
     fertilizerBuyOrganicCount:
       accountId && typeof store.getFertilizerBuyOrganicCount === "function"
         ? store.getFertilizerBuyOrganicCount(accountId)
@@ -267,36 +263,6 @@ function registerAdminSettingsRoutes({
     try {
       const theme = String((req.body || {}).theme || "");
       const data = await provider.setUITheme(theme);
-      res.json({ ok: true, data: data || {} });
-    } catch (error) {
-      res.status(500).json({ ok: false, error: error.message });
-    }
-  });
-
-  app.post("/api/settings/auto-code-refresh", async (req, res) => {
-    const accountId = requireAccountAccess(req, res, {
-      getAccountIdFromRequest,
-      canAccessAccount,
-    });
-    if (!accountId) return;
-
-    try {
-      const data = await provider.saveAutoCodeRefresh(accountId, req.body || {});
-      res.json({ ok: true, data: data || {} });
-    } catch (error) {
-      res.status(500).json({ ok: false, error: error.message });
-    }
-  });
-
-  app.post("/api/settings/auto-code-refresh/run", async (req, res) => {
-    const accountId = requireAccountAccess(req, res, {
-      getAccountIdFromRequest,
-      canAccessAccount,
-    });
-    if (!accountId) return;
-
-    try {
-      const data = await provider.refreshAccountCode(accountId);
       res.json({ ok: true, data: data || {} });
     } catch (error) {
       res.status(500).json({ ok: false, error: error.message });

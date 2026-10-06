@@ -24,7 +24,6 @@ function createWorkerManager(deps) {
         addOrUpdateAccount,
         getAccounts,
         deleteAccount,
-        scheduleAutoRelogin,
         refreshAccountCode,
         updateSystemClientVersion,
         onStatusSync,
@@ -540,11 +539,6 @@ function createWorkerManager(deps) {
                     accountId, wrk.name);
                 if (typeof refreshAccountCode === 'function' && !credentialRefreshes.has(accountId)) {
                     const task = Promise.resolve(refreshAccountCode(accountId, 'ws_400'))
-                        .then(ok => {
-                            if (!ok && typeof scheduleAutoRelogin === 'function') {
-                                scheduleAutoRelogin(accountId, 'ws_400_refresh_failed');
-                            }
-                        })
                         .finally(() => credentialRefreshes.delete(accountId));
                     credentialRefreshes.set(accountId, task);
                 }
@@ -565,9 +559,6 @@ function createWorkerManager(deps) {
                 accountId, wrk.name, { reason });
 
             stopWorker(accountId);
-            if (typeof scheduleAutoRelogin === 'function') {
-                scheduleAutoRelogin(accountId, `kickout:${reason}`);
-            }
         } else if (msg.type === 'ws_reconnect_failed') {
             const reason = msg.reason || '未知';
             log('系统', `账号 ${  wrk.name  } 连接多次重试失败，已自动停止账号`, {
@@ -581,9 +572,6 @@ function createWorkerManager(deps) {
                 accountId, wrk.name, { reason });
 
             stopWorker(accountId);
-            if (typeof scheduleAutoRelogin === 'function') {
-                scheduleAutoRelogin(accountId, `ws_reconnect_failed:${reason}`);
-            }
         } else if (msg.type === 'client_version_update') {
             const clientVersion = cleanText(msg.clientVersion);
             if (clientVersion && typeof updateSystemClientVersion === 'function') {

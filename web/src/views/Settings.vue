@@ -8,7 +8,6 @@ import AdminSystemPanel from '@/components/admin/AdminSystemPanel.vue'
 import ConfirmModal from '@/components/ConfirmModal.vue'
 import AccountFeatureSettings from '@/components/settings/AccountFeatureSettings.vue'
 import AccountSettingsTab from '@/components/settings/AccountSettingsTab.vue'
-import AutoCodeRefreshCard from '@/components/settings/AutoCodeRefreshCard.vue'
 import DeviceProtocolCard from '@/components/settings/DeviceProtocolCard.vue'
 import OfflineReminderCard from '@/components/settings/OfflineReminderCard.vue'
 import BaseButton from '@/components/ui/BaseButton.vue'
@@ -254,12 +253,9 @@ const {
 
 const {
   localAutomationSettings,
-  localAutoCodeRefresh,
-  autoCodeRefreshing,
   fertilizerLandTypeOptions,
   fertilizerOptions,
   syncLocalAutomationSettings,
-  runAutoCodeRefreshNow,
 } = useAutomationSettings({
   currentAccountId,
   showAlert,
@@ -280,7 +276,6 @@ const {
 })
 
 const accountSettingsSaving = ref(false)
-const autoCodeRefreshSaving = ref(false)
 const systemSettingsSaving = ref(false)
 const anySystemSaving = computed(() => systemSettingsSaving.value || systemConfigSaving.value || captureConfigSaving.value || deviceProtocolSaving.value)
 
@@ -289,7 +284,6 @@ function buildCurrentAccountConfig() {
     ...settingStore.settings,
     ...localStrategySettings.value,
     ...localAutomationSettings.value,
-    autoCodeRefresh: localAutoCodeRefresh.value,
   }
 }
 
@@ -309,24 +303,6 @@ async function saveCurrentAccountSettings(_module?: string, quiet = false) {
   }
   finally {
     accountSettingsSaving.value = false
-  }
-}
-
-async function saveAutoCodeRefreshSettings() {
-  if (!currentAccountId.value || autoCodeRefreshSaving.value)
-    return
-  autoCodeRefreshSaving.value = true
-  try {
-    const result = await settingStore.saveAutoCodeRefresh(String(currentAccountId.value), localAutoCodeRefresh.value)
-    if (!result.ok)
-      throw new Error(result.error || '保存失败')
-    showAlert('微信定时刷新重登设置已保存')
-  }
-  catch (error: any) {
-    showAlert(error.response?.data?.error || error.message || '刷新设置保存失败', 'danger')
-  }
-  finally {
-    autoCodeRefreshSaving.value = false
   }
 }
 
@@ -655,17 +631,6 @@ onMounted(async () => {
             @random-mac="fillRandomDeviceMac"
             @random-device-id="fillRandomDeviceId"
             @random-imei="fillRandomImei"
-          />
-
-          <AutoCodeRefreshCard
-            v-model:config="localAutoCodeRefresh"
-            :current-account-name="currentAccountName"
-            :current-account-id="currentAccountId"
-            :loading="settingsLoading"
-            :saving="autoCodeRefreshSaving"
-            :refreshing="autoCodeRefreshing"
-            @save="saveAutoCodeRefreshSettings"
-            @refresh="runAutoCodeRefreshNow"
           />
 
           <AdminGroupVerifyCard

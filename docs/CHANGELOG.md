@@ -22,12 +22,18 @@ flowchart TB
     L --> M[2026-09-08<br/>NapCat QQ 扫码登录]
     M --> N[2026-09-10 · v2.7.0<br/>萌宠成长日记与变异效果补全]
     N --> O[2026-09-24 · v2.7.1<br/>秋祈良愿与快乐不独享活动]
+    O --> P[2026-10-05<br/>去掉定时刷新 Code]
 
     classDef seed fill:#e8f8ee,stroke:#20b967,color:#183d2a,stroke-width:2px;
-    class A,B,C,D,E,F,G,H,I,J,K,L,M,N,O seed;
+    class A,B,C,D,E,F,G,H,I,J,K,L,M,N,O,P seed;
 ```
 
 ## 详细记录
+
+### 2026-10-05 · 去掉定时刷新 Code
+
+- 移除账号级“微信定时刷新重登”设置，以及按间隔换 Code 并重启账号、被踢后延迟自动重登。
+- 微信账号启动时仍会换新 Code；登录失效时仍会立即换码恢复；应用宝凭证仍每 30 分钟保活。
 
 ### 2026-09-24 · v2.7.1 · 秋祈良愿与快乐不独享活动
 

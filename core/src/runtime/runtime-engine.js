@@ -118,7 +118,6 @@ function createRuntimeEngine(options = {}) {
         addOrUpdateAccount: store.addOrUpdateAccount,
         getAccounts: store.getAccounts,
         deleteAccount: store.deleteAccount,
-        scheduleAutoRelogin: autoCodeRefresh.scheduleRelogin,
         refreshAccountCode: autoCodeRefresh.refreshAccountCode,
         updateSystemClientVersion: (clientVersion) => {
             const value = String(clientVersion || '').trim();
@@ -199,18 +198,6 @@ function createRuntimeEngine(options = {}) {
             let launchedInBatch = 0;
             for (const acc of accounts) {
                 // 为移植前已扫码保存凭证的微信账号执行一次默认策略迁移。
-                if (acc.platform === 'wx' && acc.loginBuffer && acc.wxDefaultsApplied !== true) {
-                    const currentRefresh = store.getAutoCodeRefresh(acc.id);
-                    store.setAutoCodeRefresh(acc.id, {
-                        enabled: true,
-                        intervalMinutes: currentRefresh.intervalMinutes || 60
-                    });
-                    store.addOrUpdateAccount({ id: acc.id, wxDefaultsApplied: true });
-                    acc.wxDefaultsApplied = true;
-                    log('系统', `已为微信扫码账号 ${acc.name} 默认开启自动刷新 Code`, {
-                        accountId: String(acc.id), accountName: acc.name
-                    });
-                }
                 if (acc.platform === 'wx' && acc.loginBuffer) {
                     const refreshed = await autoCodeRefresh.refreshAccountCode(acc.id, 'startup');
                     if (!refreshed) startWorker(acc);

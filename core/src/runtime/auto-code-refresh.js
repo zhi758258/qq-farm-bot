@@ -3,7 +3,6 @@ const wxLoginAdapter = require('../services/wx-login-adapter');
 
 function createAutoCodeRefreshService(deps) {
   const {
-    store,
     getAccounts,
     addOrUpdateAccount,
     resolveWorkerControls,
@@ -46,17 +45,9 @@ function createAutoCodeRefreshService(deps) {
     return accounts.find(acc => String(acc.id) === String(accountId));
   }
 
-  function normalizeConfig(accountId) {
-    const cfg = store.getAutoCodeRefresh ? store.getAutoCodeRefresh(accountId) : null;
-    return {
-      enabled: cfg && cfg.enabled === true,
-      intervalMinutes: Math.max(1, Math.min(1440, Number(cfg && cfg.intervalMinutes) || 60)),
-    };
-  }
-
   async function requestFarmCode(account) {
     const wxid = String(account && account.wxid || '').trim();
-    if (!wxid) throw new Error('账号缺少 wxid，无法自动刷新 Code');
+    if (!wxid) throw new Error('账号缺少 wxid，无法刷新 Code');
 
     if (!account.loginBuffer) throw new Error('账号缺少应用宝登录凭据，请重新扫码登录');
     if (account.refreshtoken) {
@@ -89,9 +80,9 @@ function createAutoCodeRefreshService(deps) {
       const controls = typeof resolveWorkerControls === 'function' ? (resolveWorkerControls() || {}) : {};
       if (typeof controls.restartWorker === 'function') controls.restartWorker(nextAccount);
 
-      addAccountLog('auto_code_refresh', `自动刷新 Code 成功，已重启账号: ${  account.name}`,
+      addAccountLog('auto_code_refresh', `刷新 Code 成功，已重启账号: ${  account.name}`,
         account.id, account.name, { reason });
-      log('系统', `自动刷新 Code 成功: ${  account.name}`, {
+      log('系统', `刷新 Code 成功: ${  account.name}`, {
         accountId: String(account.id),
         accountName: account.name,
       });
@@ -99,9 +90,9 @@ function createAutoCodeRefreshService(deps) {
       return true;
     } catch (err) {
       if (recovery) recovery.failures += 1;
-      addAccountLog('auto_code_refresh_failed', `自动刷新 Code 失败: ${  err.message}`,
+      addAccountLog('auto_code_refresh_failed', `刷新 Code 失败: ${  err.message}`,
         account.id, account.name, { reason });
-      log('错误', `自动刷新 Code 失败: ${  account.name  } - ${  err.message}`, {
+      log('错误', `刷新 Code 失败: ${  account.name  } - ${  err.message}`, {
         accountId: String(account.id),
         accountName: account.name,
       });
@@ -110,18 +101,15 @@ function createAutoCodeRefreshService(deps) {
   }
 
   function scheduleAccount(accountId) {
-    const cfg = normalizeConfig(accountId);
-    const taskName = getTaskName(accountId);
-    scheduler.clear(taskName);
+    scheduler.clear(getTaskName(accountId));
     scheduler.clear(getKeepaliveTaskName(accountId));
+    scheduler.clear(`relogin_${String(accountId || '')}`);
 
     const account = findAccount(accountId);
-    // Code refresh and credential keepalive only apply to WeChat scan-login accounts.
-    // All accounts are passed through rescheduleAll(), so QQ accounts must exit quietly.
     if (!account || account.platform !== 'wx') return;
 
     if (!String(account.wxid || '').trim()) {
-      log('系统', '自动刷新 Code 未启动: 账号缺少 wxid', {
+      log('系统', '微信凭证保活未启动: 账号缺少 wxid', {
         accountId: String(accountId),
         accountName: account.name || '',
       });
@@ -140,17 +128,6 @@ function createAutoCodeRefreshService(deps) {
         }
       }, { preventOverlap: true });
     }
-
-    if (!cfg.enabled) return;
-
-    scheduler.setIntervalTask(taskName, cfg.intervalMinutes * 60000, () => {
-      refreshAccountCode(accountId, 'timer');
-    }, { preventOverlap: true });
-
-    log('系统', `自动刷新 Code 已启用: ${  account.name  }，间隔 ${  cfg.intervalMinutes  } 分钟`, {
-      accountId: String(accountId),
-      accountName: account.name,
-    });
   }
 
   function rescheduleAll() {
@@ -168,35 +145,11 @@ function createAutoCodeRefreshService(deps) {
     scheduler.clear(`relogin_${String(accountId || '')}`);
   }
 
-  function scheduleRelogin(accountId, reason = 'offline') {
-    const cfg = normalizeConfig(accountId);
-    if (!cfg.enabled) return false;
-    const account = findAccount(accountId);
-    if (!account || !account.loginBuffer) return false;
-    const recovery = getRecoveryState(accountId);
-    if (recovery.attempts >= MAX_DAILY_RECOVERIES
-      || recovery.failures >= MAX_CONSECUTIVE_FAILURES) {
-      addAccountLog('auto_relogin_blocked', '自动重登次数已达上限，请检查网络或重新扫码',
-        account.id, account.name, { reason, ...recovery });
-      return false;
-    }
-    const taskName = `relogin_${String(accountId || '')}`;
-    scheduler.clear(taskName);
-    scheduler.setTimeoutTask(taskName, cfg.intervalMinutes * 60000, () => {
-      refreshAccountCode(accountId, reason);
-    });
-    log('系统', `账号 ${account.name} 将在 ${cfg.intervalMinutes} 分钟后自动刷新凭证并重登`, {
-      accountId: String(accountId), accountName: account.name, reason,
-    });
-    return true;
-  }
-
   return {
     refreshAccountCode,
     scheduleAccount,
     rescheduleAll,
     stopAccount,
-    scheduleRelogin,
   };
 }
 

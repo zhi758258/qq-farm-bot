@@ -280,7 +280,6 @@ function createDataProvider(deps) {
                 prioritizeGrowthTasks: s.prioritizeGrowthTasks,
                 intervals: s.intervals,
                 friendQuietHours: s.friendQuietHours,
-                autoCodeRefresh: s.autoCodeRefresh,
                 fertilizerBuyOrganicCount: s.fertilizerBuyOrganicCount,
                 fertilizerBuyOrganicThresholdHours: s.fertilizerBuyOrganicThresholdHours,
                 fertilizerBuyNormalCount: s.fertilizerBuyNormalCount,
@@ -296,16 +295,12 @@ function createDataProvider(deps) {
             store.applyConfigSnapshot(patch, { accountId: id });
             const rev = nextConfigRevision();
             broadcastConfigToWorkers(id);
-            if (s.autoCodeRefresh && typeof scheduleAutoCodeRefresh === 'function') {
-                scheduleAutoCodeRefresh(id);
-            }
             return {
                 strategy: store.getPlantingStrategy(id),
                 prioritize2x2Crops: store.getPrioritize2x2Crops(id),
                 prioritizeGrowthTasks: store.getPrioritizeGrowthTasks(id),
                 intervals: store.getIntervals(id),
                 friendQuietHours: store.getFriendQuietHours(id),
-                autoCodeRefresh: store.getAutoCodeRefresh(id),
                 fertilizerBuyOrganicCount: store.getFertilizerBuyOrganicCount(id),
                 fertilizerBuyOrganicThresholdHours: store.getFertilizerBuyOrganicThresholdHours(id),
                 fertilizerBuyNormalCount: store.getFertilizerBuyNormalCount(id),
@@ -326,14 +321,6 @@ function createDataProvider(deps) {
             nextConfigRevision();
             broadcastConfigToWorkers(id);
             return true;
-        },
-
-        saveAutoCodeRefresh: async (ref, config) => {
-            const id = resolveAccountId(ref);
-            if (!id) throw new Error('Missing x-account-id');
-            const data = store.setAutoCodeRefresh(id, config || {});
-            if (typeof scheduleAutoCodeRefresh === 'function') scheduleAutoCodeRefresh(id);
-            return { autoCodeRefresh: data };
         },
 
         refreshAccountCode: async (ref) => {
