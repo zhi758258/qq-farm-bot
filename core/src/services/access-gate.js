@@ -4,6 +4,9 @@ const COOKIE_NAME = "farm_access_pass";
 const DEFAULT_PASS_TTL_MS = 60 * 60 * 1000;
 const DEFAULT_CHALLENGE_TTL_MS = 5 * 60 * 1000;
 const TILE_COUNT = 9;
+const SLIDE_TOLERANCE = 5;
+const CHALLENGE_TYPES = ["math", "icon", "slide", "drag"];
+const DRAG_PIECE_COUNT = 4;
 const ICONS = [
   { key: "cat", label: "猫", glyph: "🐱" },
   { key: "dog", label: "狗", glyph: "🐶" },
@@ -151,8 +154,32 @@ function createAccessGate(options = {}) {
     return verifyPassToken(readCookie(req, COOKIE_NAME), getIp(req));
   }
 
-  function createChallenge(ip) {
-    pruneChallenges();
+  function createMathChallenge() {
+    const op = randomInt(0, 1) === 0 ? "+" : "-";
+    let left;
+    let right;
+    let answer;
+    if (op === "+") {
+      left = randomInt(1, 20);
+      right = randomInt(1, 20);
+      answer = left + right;
+    } else {
+      left = randomInt(1, 20);
+      right = randomInt(1, left);
+      answer = left - right;
+    }
+    return {
+      type: "math",
+      answer,
+      public: {
+        type: "math",
+        prompt: "请完成随机加减法",
+        question: `${left} ${op} ${right}`,
+      },
+    };
+  }
+
+  function createIconChallenge() {
     const targetIndex = randomInt(0, ICONS.length - 1);
     const target = ICONS[targetIndex];
     const targetCount = randomInt(2, 3);
@@ -169,19 +196,95 @@ function createAccessGate(options = {}) {
       label: item.label,
       glyph: item.glyph,
     }));
-    const answer = tiles
-      .filter((item) => item.label === target.label)
-      .map((item) => item.id);
+    return {
+      type: "icon",
+      answer: tiles.filter((item) => item.label === target.label).map((item) => item.id),
+      public: {
+        type: "icon",
+        prompt: `请点击所有「${target.label}」`,
+        tiles,
+      },
+    };
+  }
+
+  function createSlideChallenge() {
+    const target = randomInt(24, 86);
+    return {
+      type: "slide",
+      answer: target,
+      public: {
+        type: "slide",
+        prompt: "请将滑块拖到标记处",
+        target,
+      },
+    };
+  }
+
+  function createDragChallenge() {
+    const shuffled = shuffleCopy(ICONS, randomInt);
+    const pieces = shuffled.slice(0, DRAG_PIECE_COUNT).map((item) => ({
+      id: crypto.randomBytes(8).toString("hex"),
+      label: item.label,
+      glyph: item.glyph,
+    }));
+    const target = pieces[randomInt(0, pieces.length - 1)];
+    return {
+      type: "drag",
+      answer: target.id,
+      public: {
+        type: "drag",
+        prompt: `请把「${target.label}」拖到框内`,
+        pieces,
+        slot: {
+          label: target.label,
+        },
+      },
+    };
+  }
+
+  function buildChallenge(type) {
+    if (type === "math") return createMathChallenge();
+    if (type === "slide") return createSlideChallenge();
+    if (type === "drag") return createDragChallenge();
+    return createIconChallenge();
+  }
+
+  function pickType(forcedType) {
+    if (CHALLENGE_TYPES.includes(forcedType)) return forcedType;
+    return CHALLENGE_TYPES[randomInt(0, CHALLENGE_TYPES.length - 1)];
+  }
+
+  function answersMatch(challenge, answer) {
+    if (challenge.type === "math") {
+      const numeric = Number(answer);
+      return Number.isFinite(numeric) && numeric === challenge.answer;
+    }
+    if (challenge.type === "icon") {
+      return sameIdSet(answer, challenge.answer);
+    }
+    if (challenge.type === "slide") {
+      const numeric = Number(answer);
+      return Number.isFinite(numeric) && Math.abs(numeric - challenge.answer) <= SLIDE_TOLERANCE;
+    }
+    if (challenge.type === "drag") {
+      return String(answer || "") === String(challenge.answer);
+    }
+    return false;
+  }
+
+  function createChallenge(ip, forcedType) {
+    pruneChallenges();
+    const built = buildChallenge(pickType(forcedType));
     const id = crypto.randomBytes(16).toString("hex");
     challenges.set(id, {
-      answer,
+      type: built.type,
+      answer: built.answer,
       ip: normalizeIp(ip),
       expiresAt: now() + challengeTtlMs,
     });
     return {
       id,
-      prompt: `请点击所有「${target.label}」`,
-      tiles,
+      ...built.public,
     };
   }
 
@@ -199,7 +302,7 @@ function createAccessGate(options = {}) {
     if (challenge.ip !== normalizeIp(ip)) {
       return { ok: false, status: 404, error: "Not Found" };
     }
-    if (!sameIdSet(answer, challenge.answer)) {
+    if (!answersMatch(challenge, answer)) {
       return { ok: false, status: 404, error: "Not Found" };
     }
     return {
@@ -239,5 +342,6 @@ function createAccessGate(options = {}) {
 module.exports = {
   COOKIE_NAME,
   DEFAULT_PASS_TTL_MS,
+  CHALLENGE_TYPES,
   createAccessGate,
 };

@@ -1,8 +1,9 @@
 <script setup lang="ts">
 import axios from 'axios'
-import { onMounted, ref } from 'vue'
+import { computed, nextTick, onMounted, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import BaseButton from '@/components/ui/BaseButton.vue'
+import BaseInput from '@/components/ui/BaseInput.vue'
 import { markAccessGatePassed } from '@/utils/access-gate'
 
 interface GateTile {
@@ -11,15 +12,42 @@ interface GateTile {
   glyph: string
 }
 
+const INTEGER_RE = /^-?\d+$/
+
 const router = useRouter()
 const route = useRoute()
 const loading = ref(false)
 const fetching = ref(true)
+const challengeType = ref('')
 const prompt = ref('')
+const question = ref('')
 const challengeId = ref('')
 const tiles = ref<GateTile[]>([])
+const pieces = ref<GateTile[]>([])
+const slotLabel = ref('')
 const selected = ref<string[]>([])
+const mathAnswer = ref('')
+const slideValue = ref(0)
+const slideTarget = ref(50)
 const error = ref('')
+const answerInput = ref<HTMLElement | null>(null)
+const sliding = ref(false)
+const droppedId = ref('')
+
+const subtitle = computed(() => {
+  if (challengeType.value === 'math')
+    return '请完成随机加减法后进入网站'
+  if (challengeType.value === 'slide')
+    return '请将滑块拖到标记处后进入网站'
+  if (challengeType.value === 'icon')
+    return '请点击题目要求的图案文字后进入网站'
+  if (challengeType.value === 'drag')
+    return '请把指定图案拖到框内后进入网站'
+  return '请完成访问验证后进入网站'
+})
+
+const droppedPiece = computed(() => pieces.value.find(item => item.id === droppedId.value) || null)
+const remainingPieces = computed(() => pieces.value.filter(item => item.id !== droppedId.value))
 
 function redirectAfterPass() {
   markAccessGatePassed()
@@ -29,6 +57,14 @@ function redirectAfterPass() {
     return
   }
   router.replace({ name: 'login' })
+}
+
+async function focusAnswer() {
+  await nextTick()
+  const root = answerInput.value
+  const input = root && root.querySelector ? root.querySelector('input') : null
+  if (input && typeof input.focus === 'function')
+    input.focus()
 }
 
 function toggleTile(id: string) {
@@ -42,10 +78,30 @@ function toggleTile(id: string) {
   error.value = ''
 }
 
+function resetLocalState() {
+  selected.value = []
+  mathAnswer.value = ''
+  slideValue.value = 0
+  sliding.value = false
+  droppedId.value = ''
+}
+
+function applyChallenge(data: any) {
+  challengeId.value = data?.id || ''
+  challengeType.value = data?.type || ''
+  prompt.value = data?.prompt || ''
+  question.value = data?.question || ''
+  tiles.value = Array.isArray(data?.tiles) ? data.tiles : []
+  pieces.value = Array.isArray(data?.pieces) ? data.pieces : []
+  slotLabel.value = data?.slot?.label || ''
+  slideTarget.value = Number(data?.target) || 50
+  resetLocalState()
+}
+
 async function loadChallenge() {
   fetching.value = true
   error.value = ''
-  selected.value = []
+  resetLocalState()
   try {
     const res = await axios.get('/api/access-gate/challenge', {
       timeout: 8000,
@@ -55,9 +111,9 @@ async function loadChallenge() {
       redirectAfterPass()
       return
     }
-    challengeId.value = res.data?.data?.id || ''
-    prompt.value = res.data?.data?.prompt || ''
-    tiles.value = Array.isArray(res.data?.data?.tiles) ? res.data.data.tiles : []
+    applyChallenge(res.data?.data)
+    if (challengeType.value === 'math')
+      await focusAnswer()
   }
   catch (e: any) {
     if (e?.response?.status === 404) {
@@ -71,6 +127,33 @@ async function loadChallenge() {
   }
 }
 
+function currentAnswer() {
+  if (challengeType.value === 'math') {
+    const raw = String(mathAnswer.value ?? '').trim()
+    if (!raw)
+      return { error: '请输入答案' }
+    if (!INTEGER_RE.test(raw))
+      return { error: '请输入整数答案' }
+    return { answer: Number(raw) }
+  }
+  if (challengeType.value === 'icon') {
+    if (selected.value.length === 0)
+      return { error: '请点击对应的图案文字' }
+    return { answer: selected.value }
+  }
+  if (challengeType.value === 'slide') {
+    if (!sliding.value)
+      return { error: '请拖动滑块完成验证' }
+    return { answer: Math.round(slideValue.value) }
+  }
+  if (challengeType.value === 'drag') {
+    if (!droppedId.value)
+      return { error: '请把指定图案拖到框内' }
+    return { answer: droppedId.value }
+  }
+  return { error: '验证已过期，请刷新' }
+}
+
 async function handleSubmit() {
   if (loading.value)
     return
@@ -78,8 +161,9 @@ async function handleSubmit() {
     error.value = '验证已过期，请刷新'
     return
   }
-  if (selected.value.length === 0) {
-    error.value = '请点击对应的图案文字'
+  const payload = currentAnswer()
+  if (payload.error) {
+    error.value = payload.error
     return
   }
   loading.value = true
@@ -87,7 +171,7 @@ async function handleSubmit() {
   try {
     const res = await axios.post('/api/access-gate/verify', {
       id: challengeId.value,
-      answer: selected.value,
+      answer: payload.answer,
     }, {
       timeout: 8000,
       withCredentials: true,
@@ -113,6 +197,40 @@ async function handleSubmit() {
   }
 }
 
+function onSlideInput() {
+  sliding.value = true
+  error.value = ''
+}
+
+function onPieceDragStart(event: DragEvent, id: string) {
+  if (loading.value || fetching.value)
+    return
+  event.dataTransfer?.setData('text/plain', id)
+  if (event.dataTransfer)
+    event.dataTransfer.effectAllowed = 'move'
+}
+
+function onSlotDragOver(event: DragEvent) {
+  event.preventDefault()
+  if (event.dataTransfer)
+    event.dataTransfer.dropEffect = 'move'
+}
+
+function onSlotDrop(event: DragEvent) {
+  event.preventDefault()
+  const id = event.dataTransfer?.getData('text/plain') || ''
+  if (!id || !pieces.value.some(item => item.id === id))
+    return
+  droppedId.value = id
+  error.value = ''
+}
+
+function clearDropped() {
+  if (loading.value || fetching.value)
+    return
+  droppedId.value = ''
+}
+
 onMounted(() => {
   loadChallenge()
 })
@@ -129,7 +247,7 @@ onMounted(() => {
           访问验证
         </h1>
         <p class="login-subtitle">
-          请点击题目要求的图案文字后进入网站
+          {{ fetching ? '正在获取题目…' : subtitle }}
         </p>
       </div>
 
@@ -137,10 +255,22 @@ onMounted(() => {
         <div class="form-field">
           <label class="form-label">题目</label>
           <div class="question-box">
-            {{ fetching ? '正在获取题目…' : (prompt || '请刷新重试') }}
+            {{ fetching ? '正在获取题目…' : (challengeType === 'math' ? question : (prompt || '请刷新重试')) }}
           </div>
         </div>
-        <div class="tile-grid">
+
+        <div v-if="challengeType === 'math'" class="form-field">
+          <label class="form-label">答案</label>
+          <div ref="answerInput">
+            <BaseInput
+              v-model="mathAnswer"
+              type="number"
+              placeholder="请输入计算结果"
+            />
+          </div>
+        </div>
+
+        <div v-else-if="challengeType === 'icon'" class="tile-grid">
           <button
             v-for="tile in tiles"
             :key="tile.id"
@@ -154,6 +284,55 @@ onMounted(() => {
             <span class="tile-label">{{ tile.label }}</span>
           </button>
         </div>
+
+        <div v-else-if="challengeType === 'slide'" class="slide-wrap">
+          <div class="slide-track">
+            <div class="slide-mark" :style="{ left: `${slideTarget}%` }" />
+            <input
+              v-model.number="slideValue"
+              class="slide-input"
+              type="range"
+              min="0"
+              max="100"
+              :disabled="fetching || loading"
+              @input="onSlideInput"
+            >
+          </div>
+          <div class="slide-hint">
+            拖到绿色标记处后点击验证
+          </div>
+        </div>
+
+        <div v-else-if="challengeType === 'drag'" class="drag-wrap">
+          <div
+            class="drop-slot"
+            :class="{ filled: !!droppedPiece }"
+            @dragover="onSlotDragOver"
+            @drop="onSlotDrop"
+            @click="clearDropped"
+          >
+            <template v-if="droppedPiece">
+              <span class="tile-glyph">{{ droppedPiece.glyph }}</span>
+              <span class="tile-label">{{ droppedPiece.label }}</span>
+            </template>
+            <span v-else class="drop-placeholder">拖到这里：{{ slotLabel }}</span>
+          </div>
+          <div class="drag-pieces">
+            <button
+              v-for="piece in remainingPieces"
+              :key="piece.id"
+              type="button"
+              class="tile"
+              draggable="true"
+              :disabled="fetching || loading"
+              @dragstart="onPieceDragStart($event, piece.id)"
+            >
+              <span class="tile-glyph">{{ piece.glyph }}</span>
+              <span class="tile-label">{{ piece.label }}</span>
+            </button>
+          </div>
+        </div>
+
         <div v-if="error" class="message error-message">
           {{ error }}
         </div>
@@ -320,6 +499,76 @@ onMounted(() => {
   font-size: 0.75rem;
   font-weight: 600;
   opacity: 0.75;
+}
+
+.slide-wrap {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.slide-track {
+  position: relative;
+  height: 44px;
+  display: flex;
+  align-items: center;
+}
+
+.slide-mark {
+  position: absolute;
+  top: 8px;
+  bottom: 8px;
+  width: 4px;
+  margin-left: -2px;
+  border-radius: 999px;
+  background: var(--theme-primary);
+  pointer-events: none;
+}
+
+.slide-input {
+  width: 100%;
+  accent-color: var(--theme-primary);
+}
+
+.slide-hint {
+  font-size: 0.75rem;
+  opacity: 0.55;
+  text-align: center;
+}
+
+.drag-wrap {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.drop-slot {
+  min-height: 88px;
+  border: 2px dashed color-mix(in srgb, var(--theme-primary) 45%, transparent);
+  border-radius: 12px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  background: color-mix(in srgb, var(--theme-primary) 8%, transparent);
+}
+
+.drop-slot.filled {
+  border-style: solid;
+  cursor: pointer;
+}
+
+.drop-placeholder {
+  font-size: 0.8125rem;
+  font-weight: 600;
+  opacity: 0.65;
+}
+
+.drag-pieces {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 8px;
 }
 
 .message {

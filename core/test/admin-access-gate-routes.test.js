@@ -47,15 +47,30 @@ async function invoke(handlersList, route, req) {
 }
 
 function correctAnswer(data) {
+  if (data.type === "math") {
+    const match = String(data.question || "").match(/^(\d+)\s*([+-])\s*(\d+)$/);
+    assert.ok(match, "加减法题目格式不正确");
+    const left = Number(match[1]);
+    const right = Number(match[3]);
+    return match[2] === "+" ? left + right : left - right;
+  }
+  if (data.type === "slide") return data.target;
   const match = String(data.prompt || "").match(/「(.+)」/);
   assert.ok(match, "题目应包含目标文字");
+  if (data.type === "drag") {
+    const piece = (data.pieces || []).find((item) => item.label === match[1]);
+    assert.ok(piece, "拖拽题目应包含目标图案");
+    return piece.id;
+  }
   return data.tiles.filter((tile) => tile.label === match[1]).map((tile) => tile.id);
 }
 
-test("点对验证后写入通行证 cookie", async () => {
+test("答对验证后写入通行证 cookie", async () => {
   const gate = createAccessGate({
     secret: Buffer.from("route-secret"),
   });
+  const originalCreate = gate.createChallenge.bind(gate);
+  gate.createChallenge = (ip) => originalCreate(ip, "icon");
   const { app, handlers } = createMockApp();
   registerAdminAccessGateRoutes({ app, accessGate: gate });
 
@@ -66,6 +81,7 @@ test("点对验证后写入通行证 cookie", async () => {
   });
   assert.equal(challengeRes.payload.ok, true);
   assert.equal(challengeRes.payload.passed, false);
+  assert.equal(challengeRes.payload.data.type, "icon");
   assert.match(challengeRes.payload.data.prompt, /^请点击所有「.+」$/);
   assert.equal(challengeRes.payload.data.tiles.length, 9);
 
@@ -80,10 +96,12 @@ test("点对验证后写入通行证 cookie", async () => {
   assert.ok(verifyRes.cookieValue);
 });
 
-test("点错返回 404", async () => {
+test("答错返回 404", async () => {
   const gate = createAccessGate({
     secret: Buffer.from("route-secret"),
   });
+  const originalCreate = gate.createChallenge.bind(gate);
+  gate.createChallenge = (ip) => originalCreate(ip, "math");
   const { app, handlers } = createMockApp();
   registerAdminAccessGateRoutes({ app, accessGate: gate });
   const challengeRes = await invoke(handlers.get, "/api/access-gate/challenge", {
@@ -94,7 +112,7 @@ test("点错返回 404", async () => {
   const verifyRes = await invoke(handlers.post, "/api/access-gate/verify", {
     ip: "198.51.100.10",
     headers: {},
-    body: { id: challengeRes.payload.data.id, answer: ["wrong"] },
+    body: { id: challengeRes.payload.data.id, answer: 999 },
   });
   assert.equal(verifyRes.statusCode, 404);
   assert.equal(verifyRes.payload.ok, false);
