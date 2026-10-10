@@ -47,39 +47,28 @@ test("局域网和本机访问不拦截", () => {
   assert.equal(isProxyOrVpnRequest(createReq({ ip: "10.0.0.12" })), false);
 });
 
-test("站点反代的 Via / 单跳 X-Forwarded-For 不拦截", () => {
+test("站点反代头不拦截", () => {
   const req = createReq({
     ip: "203.0.113.10",
     headers: {
       via: "1.1 nginx",
-      "x-forwarded-for": "203.0.113.10",
+      "x-forwarded-for": "198.51.100.20, 203.0.113.10",
       "x-real-ip": "203.0.113.10",
+      "cf-connecting-ip": "203.0.113.10",
     },
   });
   assert.equal(isProxyOrVpnRequest(req), false);
+});
+
+test("机房出口 IP 不误伤普通访客", () => {
+  assert.equal(isProxyOrVpnRequest(createReq({ ip: "54.239.28.85" })), false);
+  assert.equal(isProxyOrVpnRequest(createReq({ ip: "167.71.12.34" })), false);
 });
 
 test("客户端代理头直接判定为代理", () => {
   const req = createReq({
     ip: "203.0.113.10",
     headers: { "proxy-connection": "keep-alive" },
-  });
-  assert.equal(isProxyOrVpnRequest(req), true);
-});
-
-test("机房/VPN 出口 IP 判定为代理", () => {
-  assert.equal(isProxyOrVpnRequest(createReq({ ip: "54.239.28.85" })), true);
-  assert.equal(isProxyOrVpnRequest(createReq({ ip: "167.71.12.34" })), true);
-  assert.equal(isProxyOrVpnRequest(createReq({ ip: "185.65.134.20" })), true);
-});
-
-test("X-Forwarded-For 与真实 IP 不一致视为层层代理", () => {
-  const req = createReq({
-    ip: "203.0.113.10",
-    headers: {
-      "cf-connecting-ip": "203.0.113.10",
-      "x-forwarded-for": "198.51.100.20, 203.0.113.10",
-    },
   });
   assert.equal(isProxyOrVpnRequest(req), true);
 });
