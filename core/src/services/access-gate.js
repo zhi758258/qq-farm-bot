@@ -3,9 +3,42 @@ const crypto = require("node:crypto");
 const COOKIE_NAME = "farm_access_pass";
 const DEFAULT_PASS_TTL_MS = 60 * 60 * 1000;
 const DEFAULT_CHALLENGE_TTL_MS = 5 * 60 * 1000;
+const TILE_COUNT = 9;
+const ICONS = [
+  { key: "cat", label: "猫", glyph: "🐱" },
+  { key: "dog", label: "狗", glyph: "🐶" },
+  { key: "flower", label: "花", glyph: "🌸" },
+  { key: "fish", label: "鱼", glyph: "🐟" },
+  { key: "bird", label: "鸟", glyph: "🐦" },
+  { key: "sun", label: "太阳", glyph: "☀️" },
+  { key: "moon", label: "月亮", glyph: "🌙" },
+  { key: "star", label: "星星", glyph: "⭐" },
+  { key: "tree", label: "树", glyph: "🌳" },
+  { key: "apple", label: "苹果", glyph: "🍎" },
+  { key: "car", label: "车", glyph: "🚗" },
+  { key: "house", label: "房子", glyph: "🏠" },
+];
 
 function defaultRandomInt(min, max) {
   return crypto.randomInt(min, max + 1);
+}
+
+function shuffleCopy(list, randomInt) {
+  const arr = list.slice();
+  for (let i = arr.length - 1; i > 0; i -= 1) {
+    const j = randomInt(0, i);
+    const current = arr[i];
+    arr[i] = arr[j];
+    arr[j] = current;
+  }
+  return arr;
+}
+
+function sameIdSet(left, right) {
+  if (!Array.isArray(left) || !Array.isArray(right) || left.length !== right.length) return false;
+  const a = left.map((item) => String(item)).sort();
+  const b = right.map((item) => String(item)).sort();
+  return a.every((value, index) => value === b[index]);
 }
 
 function normalizeIp(ip) {
@@ -120,19 +153,25 @@ function createAccessGate(options = {}) {
 
   function createChallenge(ip) {
     pruneChallenges();
-    const op = randomInt(0, 1) === 0 ? "+" : "-";
-    let left;
-    let right;
-    let answer;
-    if (op === "+") {
-      left = randomInt(1, 20);
-      right = randomInt(1, 20);
-      answer = left + right;
-    } else {
-      left = randomInt(1, 20);
-      right = randomInt(1, left);
-      answer = left - right;
+    const targetIndex = randomInt(0, ICONS.length - 1);
+    const target = ICONS[targetIndex];
+    const targetCount = randomInt(2, 3);
+    const decoys = ICONS.filter((item) => item.key !== target.key);
+    const shuffledDecoys = shuffleCopy(decoys, randomInt);
+    const rawTiles = [];
+    for (let i = 0; i < targetCount; i += 1) rawTiles.push(target);
+    for (let i = 0; i < TILE_COUNT - targetCount; i += 1) {
+      rawTiles.push(shuffledDecoys[i % shuffledDecoys.length]);
     }
+    const shuffledTiles = shuffleCopy(rawTiles, randomInt);
+    const tiles = shuffledTiles.map((item) => ({
+      id: crypto.randomBytes(8).toString("hex"),
+      label: item.label,
+      glyph: item.glyph,
+    }));
+    const answer = tiles
+      .filter((item) => item.label === target.label)
+      .map((item) => item.id);
     const id = crypto.randomBytes(16).toString("hex");
     challenges.set(id, {
       answer,
@@ -141,7 +180,8 @@ function createAccessGate(options = {}) {
     });
     return {
       id,
-      question: `${left} ${op} ${right}`,
+      prompt: `请点击所有「${target.label}」`,
+      tiles,
     };
   }
 
@@ -159,8 +199,7 @@ function createAccessGate(options = {}) {
     if (challenge.ip !== normalizeIp(ip)) {
       return { ok: false, status: 404, error: "Not Found" };
     }
-    const numeric = Number(answer);
-    if (!Number.isFinite(numeric) || numeric !== challenge.answer) {
+    if (!sameIdSet(answer, challenge.answer)) {
       return { ok: false, status: 404, error: "Not Found" };
     }
     return {

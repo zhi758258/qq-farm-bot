@@ -46,14 +46,15 @@ async function invoke(handlersList, route, req) {
   return res;
 }
 
-test("答对验证后写入通行证 cookie", async () => {
+function correctAnswer(data) {
+  const match = String(data.prompt || "").match(/「(.+)」/);
+  assert.ok(match, "题目应包含目标文字");
+  return data.tiles.filter((tile) => tile.label === match[1]).map((tile) => tile.id);
+}
+
+test("点对验证后写入通行证 cookie", async () => {
   const gate = createAccessGate({
     secret: Buffer.from("route-secret"),
-    randomInt: (() => {
-      const values = [0, 6, 4];
-      let index = 0;
-      return () => values[index++];
-    })(),
   });
   const { app, handlers } = createMockApp();
   registerAdminAccessGateRoutes({ app, accessGate: gate });
@@ -65,12 +66,13 @@ test("答对验证后写入通行证 cookie", async () => {
   });
   assert.equal(challengeRes.payload.ok, true);
   assert.equal(challengeRes.payload.passed, false);
-  assert.equal(challengeRes.payload.data.question, "6 + 4");
+  assert.match(challengeRes.payload.data.prompt, /^请点击所有「.+」$/);
+  assert.equal(challengeRes.payload.data.tiles.length, 9);
 
   const verifyRes = await invoke(handlers.post, "/api/access-gate/verify", {
     ip: "198.51.100.10",
     headers: {},
-    body: { id: challengeRes.payload.data.id, answer: 10 },
+    body: { id: challengeRes.payload.data.id, answer: correctAnswer(challengeRes.payload.data) },
   });
   assert.equal(verifyRes.statusCode, 200);
   assert.equal(verifyRes.payload.ok, true);
@@ -78,14 +80,9 @@ test("答对验证后写入通行证 cookie", async () => {
   assert.ok(verifyRes.cookieValue);
 });
 
-test("答错返回 404", async () => {
+test("点错返回 404", async () => {
   const gate = createAccessGate({
     secret: Buffer.from("route-secret"),
-    randomInt: (() => {
-      const values = [0, 3, 1];
-      let index = 0;
-      return () => values[index++];
-    })(),
   });
   const { app, handlers } = createMockApp();
   registerAdminAccessGateRoutes({ app, accessGate: gate });
@@ -97,7 +94,7 @@ test("答错返回 404", async () => {
   const verifyRes = await invoke(handlers.post, "/api/access-gate/verify", {
     ip: "198.51.100.10",
     headers: {},
-    body: { id: challengeRes.payload.data.id, answer: 0 },
+    body: { id: challengeRes.payload.data.id, answer: ["wrong"] },
   });
   assert.equal(verifyRes.statusCode, 404);
   assert.equal(verifyRes.payload.ok, false);

@@ -1,30 +1,25 @@
 <script setup lang="ts">
 import axios from 'axios'
-import { nextTick, onMounted, ref } from 'vue'
+import { onMounted, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import BaseButton from '@/components/ui/BaseButton.vue'
-import BaseInput from '@/components/ui/BaseInput.vue'
 import { markAccessGatePassed } from '@/utils/access-gate'
 
-const INTEGER_RE = /^-?\d+$/
+interface GateTile {
+  id: string
+  label: string
+  glyph: string
+}
 
 const router = useRouter()
 const route = useRoute()
 const loading = ref(false)
 const fetching = ref(true)
-const question = ref('')
+const prompt = ref('')
 const challengeId = ref('')
-const answer = ref('')
+const tiles = ref<GateTile[]>([])
+const selected = ref<string[]>([])
 const error = ref('')
-const answerInput = ref<HTMLElement | null>(null)
-
-async function focusAnswer() {
-  await nextTick()
-  const root = answerInput.value
-  const input = root && root.querySelector ? root.querySelector('input') : null
-  if (input && typeof input.focus === 'function')
-    input.focus()
-}
 
 function redirectAfterPass() {
   markAccessGatePassed()
@@ -36,9 +31,21 @@ function redirectAfterPass() {
   router.replace({ name: 'login' })
 }
 
+function toggleTile(id: string) {
+  if (loading.value || fetching.value)
+    return
+  const index = selected.value.indexOf(id)
+  if (index >= 0)
+    selected.value = selected.value.filter(item => item !== id)
+  else
+    selected.value = [...selected.value, id]
+  error.value = ''
+}
+
 async function loadChallenge() {
   fetching.value = true
   error.value = ''
+  selected.value = []
   try {
     const res = await axios.get('/api/access-gate/challenge', {
       timeout: 8000,
@@ -49,9 +56,8 @@ async function loadChallenge() {
       return
     }
     challengeId.value = res.data?.data?.id || ''
-    question.value = res.data?.data?.question || ''
-    answer.value = ''
-    await focusAnswer()
+    prompt.value = res.data?.data?.prompt || ''
+    tiles.value = Array.isArray(res.data?.data?.tiles) ? res.data.data.tiles : []
   }
   catch (e: any) {
     if (e?.response?.status === 404) {
@@ -72,13 +78,8 @@ async function handleSubmit() {
     error.value = '验证已过期，请刷新'
     return
   }
-  const raw = String(answer.value ?? '').trim()
-  if (!raw) {
-    error.value = '请输入答案'
-    return
-  }
-  if (!INTEGER_RE.test(raw)) {
-    error.value = '请输入整数答案'
+  if (selected.value.length === 0) {
+    error.value = '请点击对应的图案文字'
     return
   }
   loading.value = true
@@ -86,7 +87,7 @@ async function handleSubmit() {
   try {
     const res = await axios.post('/api/access-gate/verify', {
       id: challengeId.value,
-      answer: Number(raw),
+      answer: selected.value,
     }, {
       timeout: 8000,
       withCredentials: true,
@@ -128,7 +129,7 @@ onMounted(() => {
           访问验证
         </h1>
         <p class="login-subtitle">
-          请完成随机加减法后进入网站
+          请点击题目要求的图案文字后进入网站
         </p>
       </div>
 
@@ -136,18 +137,22 @@ onMounted(() => {
         <div class="form-field">
           <label class="form-label">题目</label>
           <div class="question-box">
-            {{ fetching ? '正在获取题目…' : (question || '请刷新重试') }}
+            {{ fetching ? '正在获取题目…' : (prompt || '请刷新重试') }}
           </div>
         </div>
-        <div class="form-field">
-          <label class="form-label">答案</label>
-          <div ref="answerInput">
-            <BaseInput
-              v-model="answer"
-              type="number"
-              placeholder="请输入计算结果"
-            />
-          </div>
+        <div class="tile-grid">
+          <button
+            v-for="tile in tiles"
+            :key="tile.id"
+            type="button"
+            class="tile"
+            :class="{ selected: selected.includes(tile.id) }"
+            :disabled="fetching || loading"
+            @click="toggleTile(tile.id)"
+          >
+            <span class="tile-glyph">{{ tile.glyph }}</span>
+            <span class="tile-label">{{ tile.label }}</span>
+          </button>
         </div>
         <div v-if="error" class="message error-message">
           {{ error }}
@@ -256,11 +261,65 @@ onMounted(() => {
   align-items: center;
   justify-content: center;
   border-radius: 10px;
-  font-size: 1.5rem;
+  font-size: 1.05rem;
   font-weight: 700;
-  letter-spacing: 0.08em;
   background: color-mix(in srgb, var(--theme-primary) 10%, transparent);
   color: var(--theme-primary);
+  padding: 0 12px;
+  text-align: center;
+}
+
+.tile-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 8px;
+}
+
+.tile {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  min-height: 76px;
+  border: 1px solid rgba(0, 0, 0, 0.08);
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.8);
+  cursor: pointer;
+  transition:
+    border-color 0.15s ease,
+    box-shadow 0.15s ease,
+    transform 0.15s ease;
+}
+
+.dark .tile {
+  background: rgba(15, 23, 42, 0.55);
+  border-color: rgba(255, 255, 255, 0.08);
+}
+
+.tile:hover:not(:disabled) {
+  transform: translateY(-1px);
+}
+
+.tile.selected {
+  border-color: var(--theme-primary);
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--theme-primary) 28%, transparent);
+}
+
+.tile:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+
+.tile-glyph {
+  font-size: 1.6rem;
+  line-height: 1;
+}
+
+.tile-label {
+  font-size: 0.75rem;
+  font-weight: 600;
+  opacity: 0.75;
 }
 
 .message {

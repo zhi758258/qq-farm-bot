@@ -16,7 +16,8 @@ function registerAdminAccessGateRoutes({ app, accessGate }) {
       passed: false,
       data: {
         id: challenge.id,
-        question: challenge.question,
+        prompt: challenge.prompt,
+        tiles: challenge.tiles,
       },
     });
   });
