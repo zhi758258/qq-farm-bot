@@ -37,12 +37,7 @@ onMounted(() => {
         })
       }
     }
-    catch (error: any) {
-      if (error?.response?.status === 404) {
-        clearAccessGatePassed()
-        router.replace({ name: 'not-found' })
-      }
-    }
+    catch {}
   }, 60_000)
 })
 
