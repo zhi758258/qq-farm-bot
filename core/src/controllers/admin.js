@@ -69,7 +69,11 @@ const { registerAdminShopRoutes } = require("./admin-shop-routes");
 const { createAdminSessionManager } = require("./admin-session-manager");
 const { registerAdminSystemRoutes } = require("./admin-system-routes");
 const { createAccessGate } = require("../services/access-gate");
-const { createProxyVpnGuard, isProxyOrVpnRequest } = require("../services/proxy-vpn-guard");
+const {
+  createProxyVpnGuard,
+  isProxyOrVpnRequest,
+  isProxyVpnBlockEnabled,
+} = require("../services/proxy-vpn-guard");
 const {
   registerAdminAccessGateRoutes,
   createAccessGateApiGuard,
@@ -753,7 +757,7 @@ function startAdminServer(dataProvider) {
       headers: socket.handshake.headers || {},
       ip: socket.handshake.address,
     };
-    if (isProxyOrVpnRequest(handshakeReq)) {
+    if (isProxyVpnBlockEnabled() && isProxyOrVpnRequest(handshakeReq)) {
       return next(new Error("Not Found"));
     }
     if (!accessGate.isRequestPassed(handshakeReq)) {

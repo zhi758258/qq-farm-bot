@@ -58,6 +58,11 @@ function hasProxyHintHeader(headers) {
   });
 }
 
+function isProxyVpnBlockEnabled() {
+  const raw = String(process.env.FARM_BLOCK_PROXY_VPN || "").trim().toLowerCase();
+  return raw === "1" || raw === "true" || raw === "yes";
+}
+
 function isProxyOrVpnRequest(req) {
   const headers = (req && req.headers) || {};
   return hasProxyHintHeader(headers);
@@ -71,9 +76,11 @@ function sendNotFound(res) {
   res.send("Not Found");
 }
 
-function createProxyVpnGuard() {
+function createProxyVpnGuard(options = {}) {
+  const enabled =
+    typeof options.enabled === "boolean" ? options.enabled : isProxyVpnBlockEnabled();
   return (req, res, next) => {
-    if (isProxyOrVpnRequest(req)) {
+    if (enabled && isProxyOrVpnRequest(req)) {
       return sendNotFound(res);
     }
     return next();
@@ -83,6 +90,7 @@ function createProxyVpnGuard() {
 module.exports = {
   createProxyVpnGuard,
   isProxyOrVpnRequest,
+  isProxyVpnBlockEnabled,
   sendNotFound,
   readClientIp,
 };

@@ -65,7 +65,28 @@ test("机房出口 IP 不误伤普通访客", () => {
   assert.equal(isProxyOrVpnRequest(createReq({ ip: "167.71.12.34" })), false);
 });
 
-test("客户端代理头直接判定为代理", () => {
+test("默认守卫不拦截客户端代理头", async () => {
+  const prev = process.env.FARM_BLOCK_PROXY_VPN;
+  delete process.env.FARM_BLOCK_PROXY_VPN;
+  try {
+    const guard = createProxyVpnGuard();
+    const res = createRes();
+    let nextCalled = false;
+    await guard(
+      createReq({ headers: { "proxy-connection": "keep-alive" } }),
+      res,
+      () => { nextCalled = true; },
+    );
+    assert.equal(nextCalled, true);
+    assert.equal(res.statusCode, 200);
+  }
+  finally {
+    if (prev === undefined) delete process.env.FARM_BLOCK_PROXY_VPN;
+    else process.env.FARM_BLOCK_PROXY_VPN = prev;
+  }
+});
+
+test("开启后客户端代理头直接判定为代理", () => {
   const req = createReq({
     ip: "203.0.113.10",
     headers: { "proxy-connection": "keep-alive" },
@@ -74,7 +95,7 @@ test("客户端代理头直接判定为代理", () => {
 });
 
 test("守卫对代理请求返回 HTTP 404 正文 Not Found", async () => {
-  const guard = createProxyVpnGuard();
+  const guard = createProxyVpnGuard({ enabled: true });
   const res = createRes();
   let nextCalled = false;
   await guard(
