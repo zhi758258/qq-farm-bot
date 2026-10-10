@@ -243,19 +243,25 @@ function recordLoginFailure(username, ip, userAgent, reason) {
   saveLoginAttempts(list);
 }
 
-function checkLoginRateLimit(_ip) {
+function checkLoginRateLimit(ip) {
   const now = Date.now();
-  const list = loadLoginAttempts();
   const cutoff = now - RATE_LIMIT_WINDOW_MS;
-  const recent = list.filter((a) => {
-    try {
-      return new Date(a.lastAttemptAt).getTime() >= cutoff;
-    } catch {
-      return false;
-    }
-  });
-  const hits = recent.reduce((sum, a) => sum + (a.failedCount || 0), 0);
-  return hits >= RATE_LIMIT_MAX;
+  const clientIp = String(ip || '');
+  const timestamps = [];
+  for (const entry of loadLoginLogs()) {
+    if (entry.success) continue;
+    if (String(entry.ip || '') !== clientIp) continue;
+    const at = entry.createdAt ? new Date(entry.createdAt).getTime() : 0;
+    if (Number.isFinite(at) && at >= cutoff) timestamps.push(at);
+  }
+  if (timestamps.length < RATE_LIMIT_MAX) {
+    return { limited: false, remainingMs: 0 };
+  }
+  const oldest = Math.min(...timestamps);
+  return {
+    limited: true,
+    remainingMs: Math.max(0, oldest + RATE_LIMIT_WINDOW_MS - now),
+  };
 }
 
 /* ------------------------------------------------------------------------- *

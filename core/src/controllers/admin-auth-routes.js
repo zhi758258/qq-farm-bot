@@ -253,10 +253,17 @@ function registerAdminAuthRoutes({
         .json({ ok: false, error: "用户名和密码不能为空" });
     }
 
-    if (userStore.checkLoginRateLimit(ip)) {
+    const loginRateLimit = userStore.checkLoginRateLimit(ip);
+    if (loginRateLimit.limited) {
       return res
         .status(429)
-        .json({ ok: false, error: "登录尝试过于频繁，请稍后再试", errorType: 'rate_limit', code: 'RATE_LIMIT' });
+        .json({
+          ok: false,
+          error: "登录尝试过于频繁，请稍后再试",
+          errorType: 'rate_limit',
+          code: 'RATE_LIMIT',
+          remainingMs: loginRateLimit.remainingMs,
+        });
     }
 
     const user = userStore.findUser(username);
@@ -411,10 +418,17 @@ function registerAdminAuthRoutes({
       return res.status(400).json({ ok: false, error: qqCheck.error });
     }
 
-    if (userStore.checkLoginRateLimit(ip)) {
+    const registerRateLimit = userStore.checkLoginRateLimit(ip);
+    if (registerRateLimit.limited) {
       return res
         .status(429)
-        .json({ ok: false, error: "注册尝试过于频繁，请稍后再试" });
+        .json({
+          ok: false,
+          error: "注册尝试过于频繁，请稍后再试",
+          errorType: 'rate_limit',
+          code: 'RATE_LIMIT',
+          remainingMs: registerRateLimit.remainingMs,
+        });
     }
 
     const result = userStore.registerUser({

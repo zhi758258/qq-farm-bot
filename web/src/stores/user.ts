@@ -108,7 +108,7 @@ export const useUserStore = defineStore('user', () => {
 
   async function login(username: string, password: string): Promise<LoginResult> {
     try {
-      const res = await api.post('/api/login', { username, password })
+      const res = await api.post('/api/login', { username, password }, { skipErrorToast: true } as any)
       if (res.data.ok) {
         token.value = res.data.data.token
         const u = res.data.data.user
@@ -142,8 +142,23 @@ export const useUserStore = defineStore('user', () => {
   }
 
   async function register(username: string, password: string, cardCode: string, qq: string) {
-    const res = await api.post('/api/register', { username, password, cardCode, qq })
-    return res.data
+    try {
+      const res = await api.post('/api/register', { username, password, cardCode, qq }, { skipErrorToast: true } as any)
+      return res.data
+    }
+    catch (error: any) {
+      const data = error.response?.data
+      if (data) {
+        return {
+          ok: false,
+          error: data.error,
+          code: data.code,
+          errorType: data.errorType,
+          remainingMs: data.remainingMs,
+        }
+      }
+      return { ok: false, error: error.message || '网络错误' }
+    }
   }
 
   async function logout() {

@@ -58,7 +58,8 @@ api.interceptors.response.use((response) => {
       toast.error(`服务器错误 ${error.response.status} ${error.response.statusText}`)
     }
     else {
-      toast.error('请求失败，请联系管理员')
+      const backendError = String(error.response.data?.error || error.response.data?.message || '')
+      toast.error(backendError || '请求失败，请联系管理员')
     }
   }
   else if (error.request) {
