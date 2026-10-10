@@ -1,11 +1,15 @@
 <script setup lang="ts">
 import type { Theme } from '@/stores/app'
-import { onMounted } from 'vue'
-import { RouterView } from 'vue-router'
+import axios from 'axios'
+import { onMounted, onUnmounted } from 'vue'
+import { RouterView, useRouter } from 'vue-router'
 import ToastContainer from '@/components/ToastContainer.vue'
 import { useAppStore } from '@/stores/app'
+import { clearAccessGatePassed } from '@/utils/access-gate'
 
 const appStore = useAppStore()
+const router = useRouter()
+let accessGateTimer = 0
 
 // 立即应用保存的主题（在组件挂载前）
 const savedTheme = localStorage.getItem('ui_theme') as Theme
@@ -15,6 +19,31 @@ if (savedTheme && appStore.themes[savedTheme]) {
 
 onMounted(() => {
   appStore.fetchTheme()
+  accessGateTimer = window.setInterval(async () => {
+    const name = router.currentRoute.value.name
+    if (name === 'access-gate' || name === 'not-found')
+      return
+    try {
+      const res = await axios.get('/api/access-gate/status', {
+        timeout: 6000,
+        withCredentials: true,
+      })
+      if (!res.data?.passed) {
+        clearAccessGatePassed()
+        const fullPath = router.currentRoute.value.fullPath
+        router.replace({
+          name: 'access-gate',
+          query: fullPath && fullPath !== '/access-gate' ? { redirect: fullPath } : {},
+        })
+      }
+    }
+    catch {}
+  }, 60_000)
+})
+
+onUnmounted(() => {
+  if (accessGateTimer)
+    window.clearInterval(accessGateTimer)
 })
 </script>
 

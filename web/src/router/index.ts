@@ -2,6 +2,7 @@ import { useStorage } from '@vueuse/core'
 import axios from 'axios'
 import NProgress from 'nprogress'
 import { createRouter, createWebHistory } from 'vue-router'
+import { ensureAccessGatePassed } from '@/utils/access-gate'
 import { menuRoutes } from './menu'
 import 'nprogress/nprogress.css'
 
@@ -25,6 +26,7 @@ async function ensureTokenValid() {
   validatingPromise = axios.get('/api/auth/validate', {
     headers: { 'x-admin-token': token },
     timeout: 6000,
+    withCredentials: true,
   }).then((res) => {
     const ok = !!(res.data && res.data.ok)
     if (ok)
@@ -54,6 +56,16 @@ const router = createRouter({
       name: 'login',
       component: () => import('@/views/Login.vue'),
     },
+    {
+      path: '/access-gate',
+      name: 'access-gate',
+      component: () => import('@/views/AccessGate.vue'),
+    },
+    {
+      path: '/404',
+      name: 'not-found',
+      component: () => import('@/views/NotFound.vue'),
+    },
     { path: '/admin', redirect: '/admin-panel' },
     { path: '/renewal', redirect: '/' },
     { path: '/:pathMatch(.*)*', redirect: '/' },
@@ -62,6 +74,28 @@ const router = createRouter({
 
 router.beforeEach(async (to) => {
   NProgress.start()
+
+  if (to.name === 'not-found')
+    return true
+
+  const passed = await ensureAccessGatePassed()
+
+  if (to.name === 'access-gate') {
+    if (passed) {
+      const redirect = typeof to.query.redirect === 'string' ? to.query.redirect : ''
+      if (redirect && redirect.startsWith('/') && !redirect.startsWith('//'))
+        return redirect
+      return { name: 'login' }
+    }
+    return true
+  }
+
+  if (!passed) {
+    return {
+      name: 'access-gate',
+      query: to.fullPath && to.fullPath !== '/access-gate' ? { redirect: to.fullPath } : {},
+    }
+  }
 
   if (to.name === 'login') {
     if (!adminToken.value) {

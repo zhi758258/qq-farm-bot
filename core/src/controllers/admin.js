@@ -68,6 +68,11 @@ const { registerAdminSettingsRoutes } = require("./admin-settings-routes");
 const { registerAdminShopRoutes } = require("./admin-shop-routes");
 const { createAdminSessionManager } = require("./admin-session-manager");
 const { registerAdminSystemRoutes } = require("./admin-system-routes");
+const { createAccessGate } = require("../services/access-gate");
+const {
+  registerAdminAccessGateRoutes,
+  createAccessGateApiGuard,
+} = require("./admin-access-gate-routes");
 const userStore = require("../models/user-store");
 
 const adminLogger = createModuleLogger("admin");
@@ -88,6 +93,9 @@ const PUBLIC_API_PATHS = new Set([
   "/changelog",
   "/announcement",
   "/health",
+  "/access-gate/status",
+  "/access-gate/challenge",
+  "/access-gate/verify",
 ]);
 const FIVE_MINUTES_MS = 5 * 60 * 1000;
 const ONE_MINUTE_MS = 60 * 1000;
@@ -360,6 +368,8 @@ function startAdminServer(dataProvider) {
   );
   app.use(express.json({ limit: "256kb" }));
 
+  const accessGate = createAccessGate();
+
   const adminSessionManager = createAdminSessionManager({
     logger: adminLogger,
     getIo: () => io,
@@ -405,6 +415,8 @@ function startAdminServer(dataProvider) {
 
   const webDist = path.join(__dirname, "../../../web/dist");
   configureCorsMiddleware(app);
+  registerAdminAccessGateRoutes({ app, accessGate });
+  app.use("/api", createAccessGateApiGuard(accessGate));
   configureStaticAssets(app, webDist);
   app.use("/game-config", express.static(getResourcePath("gameConfig")));
   const loginAssetsDir = getDataFile("login-assets");
@@ -735,6 +747,13 @@ function startAdminServer(dataProvider) {
     },
   });
   io.use((socket, next) => {
+    const handshakeReq = {
+      headers: socket.handshake.headers || {},
+      ip: socket.handshake.address,
+    };
+    if (!accessGate.isRequestPassed(handshakeReq)) {
+      return next(new Error("ACCESS_GATE"));
+    }
     const token = getSocketHandshakeToken(socket);
     if (!token || !hasAdminToken(token)) {
       return next(new Error("Unauthorized"));

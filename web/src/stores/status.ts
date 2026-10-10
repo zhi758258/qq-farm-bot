@@ -186,6 +186,7 @@ export const useStatusStore = defineStore('status', () => {
       path: '/socket.io',
       autoConnect: false,
       transports: ['websocket', 'polling'],
+      withCredentials: true,
       upgrade: true,
       timeout: 10000,
       reconnectionAttempts: 5,

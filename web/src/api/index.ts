@@ -8,6 +8,7 @@ const accountIdRef = useStorage('current_account_id', '')
 const api = axios.create({
   baseURL: '/',
   timeout: 20000,
+  withCredentials: true,
 })
 
 let lastNetworkToastAt = 0
@@ -43,8 +44,17 @@ api.interceptors.response.use((response) => {
   const toast = useToastStore()
 
   if (error.response) {
-    if (error.response.status === 401) {
-      if (!window.location.pathname.includes('/login')) {
+    if (error.response.status === 403 && error.response.data?.code === 'ACCESS_GATE') {
+      if (!window.location.pathname.includes('/access-gate')) {
+        const redirect = `${window.location.pathname}${window.location.search}`
+        const suffix = redirect && redirect !== '/access-gate' ? `?redirect=${encodeURIComponent(redirect)}` : ''
+        window.location.href = `/access-gate${suffix}`
+      }
+      return Promise.reject(error)
+    }
+    else if (error.response.status === 401) {
+      const path = window.location.pathname
+      if (!path.includes('/login') && !path.includes('/access-gate') && !path.includes('/404')) {
         tokenRef.value = ''
         window.location.href = '/login'
         toast.warning('登录已过期，请重新登录')
