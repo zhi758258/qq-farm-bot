@@ -52,6 +52,12 @@ api.interceptors.response.use((response) => {
       }
       return Promise.reject(error)
     }
+    else if (error.response.status === 404) {
+      const data = error.response.data
+      if (typeof data === 'string' && data.trim() === 'Not Found' && !window.location.pathname.includes('/404'))
+        window.location.replace('/404')
+      return Promise.reject(error)
+    }
     else if (error.response.status === 401) {
       const path = window.location.pathname
       if (!path.includes('/login') && !path.includes('/access-gate') && !path.includes('/404')) {

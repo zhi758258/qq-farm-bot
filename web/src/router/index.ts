@@ -78,7 +78,15 @@ router.beforeEach(async (to) => {
   if (to.name === 'not-found')
     return true
 
-  const passed = await ensureAccessGatePassed()
+  let passed = false
+  try {
+    passed = await ensureAccessGatePassed()
+  }
+  catch (error: any) {
+    if (error?.code === 'PROXY_VPN' || error?.response?.status === 404)
+      return { name: 'not-found' }
+    passed = false
+  }
 
   if (to.name === 'access-gate') {
     if (passed) {

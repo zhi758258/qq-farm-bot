@@ -53,7 +53,11 @@ async function loadChallenge() {
     answer.value = ''
     await focusAnswer()
   }
-  catch {
+  catch (e: any) {
+    if (e?.response?.status === 404) {
+      router.replace({ name: 'not-found' })
+      return
+    }
     error.value = '无法获取验证题目，请刷新重试'
   }
   finally {

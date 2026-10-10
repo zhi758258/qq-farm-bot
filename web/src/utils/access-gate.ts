@@ -16,8 +16,10 @@ export async function ensureAccessGatePassed() {
     const passed = !!(res.data && res.data.passed)
     accessGateGraceUntil = passed ? Date.now() + 5000 : 0
     return passed
-  }).catch(() => {
+  }).catch((error) => {
     accessGateGraceUntil = 0
+    if (error?.response?.status === 404)
+      throw Object.assign(new Error('PROXY_VPN'), { code: 'PROXY_VPN' })
     return false
   }).finally(() => {
     accessGatePromise = null
